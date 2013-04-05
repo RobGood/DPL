@@ -1,0 +1,284 @@
+#!/usr/bin/perl -w
+# -*- coding: UTF-8 -*-
+# $Id: dplx,v 1.80 2013/04/05 18:15:11 rcgood Exp $  #%^)
+#
+# This is the DPL webservice endpoint dispatcher
+# Copyright (C) 2010-2013 Rob Good
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+
+BEGIN {
+    push @INC, '.', '/usr/local/lib/perl';
+    $ENV{PATH} = "/usr/local/bin:/usr/bin:/bin";
+}
+
+(my $Pname = $0) =~ s+^.*/++;
+my $Usage = "Usage: $Pname [<path_info> [qs params...]]";
+
+use PrimaLisp;
+use FileHandle;
+
+#---------------------------------------------------------------------
+sub urlencode {
+    my ($str) = @_;
+    $str =~ s/([^\w~.,-])/sprintf("%%%02x", ord $1)/eg;
+    return $str;
+}
+sub urldecode {
+    my ($str) = @_;
+    $str =~ s/\+/ /g;
+    $str =~ s/%([0-9A-Fa-f][0-9A-fa-f])/chr(hex("$1"))/eg;
+    return $str;
+}
+#---------------------------------------------------------------------
+
+# If we were called by some other name, pretend that was the first arg.
+if($Pname ne 'dplx') {
+    $ENV{PATH_INFO} = sprintf '/%s%s', $Pname, (exists $ENV{PATH_INFO}? $ENV{PATH_INFO}: '');
+    $Pname = 'dplx';
+}
+
+## Apache gives us a messed up PATH_INFO if there are any %2F in the URL!
+my $path_info2;
+
+my $request_uri_length;
+
+if(exists $ENV{REQUEST_URI}) {
+  $request_uri_length = length $ENV{REQUEST_URI};
+
+  my @tmp = split /\?/, $ENV{REQUEST_URI};
+
+  @tmp = split '/', $tmp[0];
+  shift @tmp; # null
+  shift @tmp; # api
+
+  my $prog = shift @tmp; # dplx
+  if($prog ne $Pname) { unshift @tmp, $prog }
+
+  unshift @tmp, '';
+  $path_info2 = join '/', @tmp;
+
+  if($ENV{PATH_INFO} ne $path_info2) {
+	 print STDERR " !! Repairing PATH_INFO !\n";
+	print STDERR " !! was  PATH_INFO: $ENV{PATH_INFO}\n";
+	print STDERR " !! shbe path_info2: $path_info2\n";
+
+	$ENV{PATH_INFO} = $path_info2;
+  }
+}
+
+
+
+if(@ARGV && $ARGV[0] ne '') {
+    my $path = shift @ARGV;
+
+    $path = "/$path"
+        unless $path =~ m~^/~;
+
+    $ENV{PATH_INFO} = $path;
+
+    my @qs = ( );
+    while(@ARGV) {
+        my $name  = shift @ARGV;
+        my $value = shift @ARGV;
+           $value = '' unless defined $value;
+
+        push @qs, sprintf('%s=%s', $name, urlencode($value));
+    }
+
+
+    $ENV{QUERY_STRING} = join('&', @qs);
+
+    $ENV{HTTP_USER_AGENT} = "$Pname/cli";
+}
+
+$ENV{REQUEST_METHOD}  = 'GET'
+  unless defined $ENV{REQUEST_METHOD};
+
+#---------------------------------------------------------------------
+
+my $cgiDir = PrimaLisp::getCGIDir;
+
+my $descDir = $ENV{DPL_DESC_DIR};
+$descDir =         'descriptor-dir'        if $0 eq "./$Pname";
+$descDir = "$cgiDir/descriptor-dir"        if ! defined $descDir;
+
+
+# What we want.
+my $queryHash = { };
+my $requestContent;
+
+# What we have.
+my $query_string     = $ENV{QUERY_STRING};
+my $reqContentLength = $ENV{CONTENT_LENGTH};
+
+if(defined $reqContentLength) {
+	read(STDIN, $requestContent, $reqContentLength);
+
+	if($ENV{REQUEST_METHOD} eq 'POST' && $ENV{CONTENT_TYPE} eq 'application/x-www-form-urlencoded') {
+		$query_string = $requestContent;
+	}
+}
+
+# Make it so.
+if(defined $query_string) {
+	map { my ($n, $v) = split '=', $_; $queryHash->{$n} = urldecode($v) } split '&', $query_string;
+}
+
+
+
+#---------------------------------------------------------------------
+
+# Get an interpreter. Point it to some Descriptors.
+my $pl = new PrimaLisp;
+$pl->setDescDir($descDir);
+
+
+if(! -t) {
+	my $logFile =             "$descDir/.$Pname.log";
+	if(-s $logFile > 100e6) {
+		my $newName = sprintf "$descDir/.$Pname-%010d.log", time;
+		print STDERR " ** $Pname: Rolling log file '$logFile' to '$newName'...\n";
+
+		if(rename($logFile, $newName)) {
+			system "renice +18 \$\$ ; gzip $newName &";
+		}
+		else {
+			print STDERR " !! $Pname: Can't rename log file '$logFile': $!\n";
+		}
+	}
+
+    my $fh = new FileHandle(">> $logFile");
+    die " !! $Pname: Can't append to log file '$logFile': $!\n"
+        unless defined $fh;
+
+    chmod 0666, $logFile;
+
+    $pl->setLogFH($fh);
+
+	$0 .= " ($ENV{PATH_INFO})";
+}
+
+
+#---------------------------------------------------------------------
+
+my $css_line = "<style\n>" . $pl->eval('$<incl/dpl.css>', {}) . '</style>';
+
+sub
+errExit {
+    my ($msg) = @_;
+
+	$msg = $@->{exception}
+        unless defined $msg;
+
+	print STDERR " !! $Pname: $@\n" if ref $@ ne 'HASH';
+	print STDERR " !! $Pname: Exception: $@->{exception}\n" if exists $@->{exception};
+	print STDERR " !! $Pname: Callstack: ", join("\n", @{$@->{callstack}}), "\n" if exists $@->{callstack};
+	print STDERR " !! $Pname: Return: $@->{value}\n"        if exists $@->{value};
+
+	my $vlinkColour      = '#a0a0a0';
+	my $backgroundColour = 'black';
+	my $foregroundColour = 'white';
+
+
+	if(defined $@->{callstack}) {
+		$msg .= "\n--\n" . join("\n", @{$@->{callstack}}) . "\n--\n";
+	}
+
+
+    print "Content-Type: text/html\r\n";
+    print "\r\n";
+
+    print <<FINI;
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">
+<html>
+<head>
+<title>Error -- $Pname</title>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+$css_line
+</head>
+<body link="$foregroundColour" vlink="$vlinkColour" text="$foregroundColour" bgcolor="$backgroundColour">
+
+<table>
+<tr><td> <h3><font color="#c00000"> Error</font> </h3></td></tr>
+<tr><td>
+<font size="+1">
+<pre>
+$msg
+</pre>
+</font>
+</td></tr></table>
+</body>
+</html>
+FINI
+
+
+    exit 0;
+    CORE::exit 0;
+}
+
+#---------------------------------------------------------------------
+
+# User auth stuff!
+my ($DPL_auth, $DPL_userid, $workspaceName);
+
+($pl, $DPL_auth, $DPL_userid, $workspaceName) = eval { $pl->DPL_login($workspaceName) };
+if($@) { errExit }
+
+
+
+# Access control
+# Return from ($acl check) => allow
+# Exception from ($acl check) => deny
+# But if there is no dpl-access, allow all.
+my $ACL_Check_code = '((fn (acl) (if (defined? $acl) ($acl check))) (catch (new-inst dpl-access $req-info)))';
+
+my $code = <<FINI;
+    (= userid (login))
+
+    (= workspace-name $workspaceName)
+
+    $ACL_Check_code
+
+    (desc-read self dplx)
+    (main \$req-info)
+
+FINI
+
+my $env = {
+    'req-info'  =>  {
+        'request-method'       => uc $ENV{REQUEST_METHOD},
+        'path-info'            => $ENV{PATH_INFO},
+        'query-hash'           => $queryHash,
+        'request-content'      => $requestContent,
+        'request-content-type' => $ENV{CONTENT_TYPE},
+
+        'Pname'                => $Pname, 
+        'user-agent'           => $ENV{HTTP_USER_AGENT},
+        'script-name'          => $ENV{SCRIPT_NAME},
+
+        'remote-addr'          => $ENV{REMOTE_ADDR},
+        'remote-port'          => $ENV{REMOTE_PORT},
+    },
+};
+
+# Run some code that call (main) in the dispatcher Descriptor.
+eval { $pl->evalAll($code, $env) };
+
+if($@) { errExit }
+
+#---------------------------------------------------------------------
+
+exit 0;

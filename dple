@@ -1,0 +1,1325 @@
+#!/usr/bin/perl -w
+# -*- coding: UTF-8 -*-
+# $Id: dple,v 1.142 2013/04/05 18:15:11 rcgood Exp $  #%^)
+#
+# This is the original descriptor (JSON object) editor.
+# Copyright (C) 2010-2013 Rob Good
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+
+BEGIN {
+    push @INC, '.', '/usr/local/lib/perl';
+    $ENV{PATH} = "/usr/local/bin:/usr/bin:/bin";
+}
+
+(my $Pname = $0) =~ s+^.*/++;
+my $Usage = "Usage: $Pname";
+
+use FileHandle;
+use JSON;
+use Encode;
+use PrimaLisp;
+
+
+#---------------------------------------------------------------------
+
+my $descDir = $ENV{DPL_DESC_DIR};
+$descDir = 'descriptor-dir' if !defined $descDir;
+
+my $title     = 'DPL Editor';
+
+my $foregroundColour = 'white';
+my $vlinkColour      = '#a0a0a0';
+my $backgroundColour = 'black';
+
+my $contentType = 'text/html';
+my $encoding    = 'UTF-8';
+
+#---------------------------------------------------------------------
+sub urlencode {
+    my ($str) = @_;
+    $str =~ s/([^\w~.,-])/sprintf("%%%02x", ord $1)/eg;
+    return $str;
+}
+sub urldecode {
+    my ($str) = @_;
+    $str =~ s/\+/ /g;
+    $str =~ s/%([0-9A-Fa-f][0-9A-fa-f])/chr(hex("$1"))/eg;
+    return $str;
+}
+sub xmlencode {
+    my ($text) = @_;
+    $text =~ s/&/&amp;/gs;
+    $text =~ s/</&lt;/gs;
+    $text =~ s/>/&gt;/gs;
+    $text =~ s/'/&#39;/gs;
+    $text =~ s/"/&quot;/gs;
+    return $text;
+}
+#---------------------------------------------------------------------
+
+my ($msg, $msg2, $msg3) = ('', '', '');
+my ($descName, $mapName);
+my $descListHTML = '';
+my $actionDescHTML = '';
+my $actionDescRaw  = '';
+
+my $remote_addr = $ENV{REMOTE_ADDR};
+my $remote_port = $ENV{REMOTE_PORT};
+
+my $hostname    = `/bin/hostname`; chomp $hostname;
+
+my ($DPL_auth, $DPL_userid, $workspaceName, $workspaceNameList);
+
+
+#--------------
+# Make available via cmdline too.
+if(@ARGV && $ARGV[0] ne '') {
+    my $path = shift @ARGV;
+    # $path =~ s~^/~~;
+    # my @path = split '/', $path;
+    # shift @path;
+    # $path = join '/', @path;
+
+    $path = "/$path"
+        unless $path =~ m~^/~;
+
+    $ENV{PATH_INFO} = $path;
+
+    my @qs = ( );
+    while(@ARGV) {
+        my $name  = shift @ARGV;
+        my $value = shift @ARGV;
+           $value = '' unless defined $value;
+
+        push @qs, sprintf('%s=%s', $name, urlencode($value));
+    }
+
+
+    $ENV{QUERY_STRING} = join('&', @qs);
+
+    $ENV{HTTP_USER_AGENT} = "$Pname/cli";
+}
+
+$ENV{REQUEST_METHOD}  = 'GET'
+  unless defined $ENV{REQUEST_METHOD};
+
+#--------------
+
+my $path_info = $ENV{PATH_INFO};
+my $query_string = $ENV{QUERY_STRING};
+# print STDERR " -- $Pname: path_info: '$path_info'\n"        if defined $path_info;
+# print STDERR " -- $Pname: query_string: '$query_string'\n"  if defined $query_string;
+
+umask 002;
+
+my $Pname_dplx = $Pname eq 'dple'? 'dplx': 'dplx+';
+
+
+my $queryHash = { };
+map { my ($n, $v) = split '=', $_; $queryHash->{$n} = urldecode($v) } split '&', $query_string;
+
+if(0) {
+    print STDERR " ** $Pname: Query String...\n";
+    map {
+        printf STDERR " ** ** **  $Pname: n: '%s', v: '%s'\n", $_, $queryHash->{$_};
+    } sort keys %$queryHash;
+    print STDERR " ** $Pname: Done Query String...\n";
+}
+
+
+
+if(defined $path_info && $path_info =~ /^\/?([-~.\w+]+)(\/([-~.\w\/]+))?$/) {
+    ($descName, $mapName) = ($1, $3);
+
+}
+
+if(!defined $descName && !defined $mapName) {
+    $descName = $queryHash->{_descName};
+
+    $mapName = $queryHash->{_mapName};
+}
+
+
+if(defined $mapName) { $mapName =~ s~^/*~~ }
+
+# print STDERR " -- $Pname: _descName: '$descName'\n"  if defined $descName;
+# print STDERR " -- $Pname:    _mapName: '$mapName'\n"     if defined $mapName;
+
+
+my $mapName0 = defined $mapName && $mapName ne ''? "/$mapName -- ": '/ -- ';
+
+$title = " $mapName0 $descName -- $title"   if defined $descName && $descName ne '';
+my $desc_rcsId = '';
+
+my ($info, $qsInfo);
+
+sub
+linkify {
+    my ($str) = @_;
+
+    return "<a href ='/api/$Pname/$descName'><b>$str</b></a> " if $str eq '/';
+
+    my @pi = ();
+    return join('/', map {
+        push @pi, $_;
+        my $pi = join('/', @pi);
+        $pi = "/$pi" if @pi;
+
+        "<a href ='/api/$Pname/$descName$pi'><b>$_</b></a>"
+    } split '/', $str);
+}
+
+
+#---------------------------------
+
+my $pl = new PrimaLisp;
+
+my $vCode = <<FINI;
+(= v (version))
+(sprintf "v%s / %s <!-- RTE: Perl %s -->"
+  (hash-get \$v / version)
+  (hash-get \$v / date)
+  (hash-get \$v / Perl))
+FINI
+
+my $dplVersionStr = $pl->evalAll($vCode, {});;
+my $ctlHTML = '';
+
+# If set to true during access check, don't leak any revealing info in error response.
+my $AccessDeniedException = 0;
+
+my $css_line = "<style\n>" . $pl->eval('$<incl/dpl.css>', {}) . '</style>';
+
+my $titleHTML;
+
+sub
+errExit {
+    my ($msg) = @_;
+
+    $msg = $@->{exception}
+        unless defined $msg;
+
+	my $headerInfoHTML = $AccessDeniedException? '': <<FINI;
+<p>
+<table border="0" width="100%" cellspacing="0" cellpadding="0">
+<tr valign="center">
+<td width="25%" align="left"><b>DPL</b> $dplVersionStr<br/><b>Editor</b> -- <i>$hostname<i></td>
+<td width="40%" align="center"><b>$titleHTML</b><br/>$desc_rcsId</td>
+<td width="35%" align="right"> <font color="#808080">$ctlHTML</font></td>
+</tr>
+</table></p>
+FINI
+
+    print "Content-Type: text/html\r\n";
+    print "\r\n";
+
+    print <<FINI;
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">
+<html>
+<head>
+<title>Error -- $Pname</title>
+<meta http-equiv="Content-Type" content="$contentType; charset=$encoding" />
+$css_line
+</head>
+<body link="$foregroundColour" vlink="$vlinkColour" text="$foregroundColour" bgcolor="$backgroundColour">
+$headerInfoHTML
+<table>
+<tr><td> <h3><font color="#c00000"> Error</font> </h3></td></tr>
+<tr><td>
+<font size="+1">
+<pre>
+$msg
+</pre>
+</font>
+</td></tr></table>
+</body>
+</html>
+FINI
+
+
+    exit 0;
+    CORE::exit 0;
+}
+
+#---------------------------------------------------------------------
+
+
+sub
+DoACLChecks {
+    my ($code, $env);
+
+    if(exists $queryHash->{_workspaceName}) { $workspaceName = $queryHash->{_workspaceName} }
+
+    ($pl, $DPL_auth, $DPL_userid, $workspaceName, $workspaceNameList) = eval { $pl->DPL_login($workspaceName) };
+    if($@) { errExit }
+
+
+
+
+
+    if(!defined $workspaceName) { errExit "Workspace name should be define dby now..." }
+
+    return if defined $DPL_userid;
+
+
+    # print STDERR " -- $Pname: Using anonymous access rules here...\n";
+    $code = '((fn (acl) (if (defined? $acl) ($acl check))) (catch (new-inst dpl-access $req-info)))';
+    $env = {
+      'req-info' => {
+          'request-method'       => uc $ENV{REQUEST_METHOD},
+          'path-info'            => $path_info,
+          'query-hash'           => $queryHash,
+          'request-content'      => undef,
+          'request-content-type' => $ENV{CONTENT_TYPE},
+
+          'Pname'                => $Pname,
+          'user-agent'           => $ENV{HTTP_USER_AGENT},
+          'script-name'          => $ENV{SCRIPT_NAME},
+
+          'remote-addr'          => $remote_addr,
+          'remote-port'          => $remote_port,
+      }};
+
+    eval { $pl->evalAll($code, $env) };
+
+    return unless $@;
+
+
+    $AccessDeniedException = 1;
+    errExit;
+}
+
+DoACLChecks;
+
+$titleHTML = (defined $DPL_userid?                   'editing':            'viewing') .
+             (defined $descName && $descName ne ''? ": <i>$descName</i>": ' mode');
+
+# print STDERR "workspaceName: $workspaceName.\n";
+# map { print STDERR "  $_\n" } @$workspaceNameList;
+
+#---------------------------------------------------------------------
+
+my $builtins = eval { $pl->eval('(builtins)', {}) };
+my $descIdx;
+
+my $XX_use_interpreter_for_read  = 0;
+my $XX_use_interpreter_for_write = 0;
+
+my $thisHTML;
+
+
+my ($workspaceFormHTML, $descFormHTML, $pathFormHTML) = ('', '', '');
+
+sub
+selectionFormHTML {
+    my ($name, $bodyHTML) = @_;
+
+    my $preHTML = <<FINI;
+<form method='GET' action='/api/$Pname' name='$name'>
+<input type='hidden' name='_mapName' value='/'/>
+<select name="_descName" onChange="window.document.pickDescriptor.submit()">
+     <option value="">   Select... </option>
+FINI
+
+    my $postHTML = <<FINI;
+</select> <br/>
+ </form>
+FINI
+
+<<FINI;
+$preHTML
+$bodyHTML
+$postHTML
+FINI
+
+}
+
+sub
+selectionOptionListHTML {
+    my ($selected, $options) = @_;
+
+    errExit "Nothing selected?" unless defined $selected;
+
+    join("\n", map {
+        sprintf "<option value='$_'%s> $_ </option>", $_ eq $selected? " selected='selected'": ''
+    } @$options);
+}
+
+
+sub
+getDescFilePath {
+    my ($descName) = @_;
+
+    my $descFile;
+
+    my $workspaceNameXX = $workspaceName;
+
+    if(!defined $DPL_userid) {
+           if($workspaceNameXX eq '/')     { $descFile = "$descDir/$descName" }
+        elsif($workspaceNameXX =~ s/^\///) { $descFile = "$descDir/.ii/$workspaceNameXX/$descName" }
+        else                               { $descFile = "$descDir/.ii/$workspaceNameXX/$descName" }
+    }
+    else {
+           if($workspaceNameXX eq '/')     { $descFile = "$descDir/$descName" }
+        elsif($workspaceNameXX =~ s/^\///) { $descFile = "$descDir/.ii/$workspaceNameXX/$descName" }
+        # elsif($workspaceNameXX eq '~')     { $descFile = "$descDir/.ii-user/$DPL_auth#$DPL_userid/$descName" }
+        # elsif($workspaceNameXX =~s/^~\///) { $descFile = "$descDir/.ii-user/$DPL_auth#$DPL_userid/.ii/$workspaceNameXX/$descName" }
+        # else                               { $descFile = "$descDir/.ii-user/$DPL_auth#$DPL_userid/.ii/$workspaceNameXX/$descName" }
+        elsif($workspaceNameXX eq '~')     { $descFile = "$descDir/.ii-user/$DPL_userid/$descName" }
+        elsif($workspaceNameXX =~s/^~\///) { $descFile = "$descDir/.ii-user/$DPL_userid/.ii/$workspaceNameXX/$descName" }
+        else                               { $descFile = "$descDir/.ii-user/$DPL_userid/.ii/$workspaceNameXX/$descName" }
+
+    }
+
+    return $descFile;
+}
+
+sub
+EditOneDescriptor {
+    my $thisURL    = "/api/$Pname/$descName";
+
+    my $descFile = getDescFilePath $descName;
+
+    my $descFileShared =  "$descDir/$descName";
+
+    my $isNew = -f $descFile || -f $descFileShared? 0: 1;
+
+    $descIdx = eval { $pl->eval('((new-inst desc-function-index) make-index $_)', {_ => $descName}) };
+    $pl->eval('(report %s (desc-to-string $_))', {_ => $@})  if $@;
+    # errExit if $@;
+
+
+    $desc_rcsId = $descIdx->{'Desc-rcs-id'};
+    if (ref $desc_rcsId eq 'ARRAY') {
+        $desc_rcsId->[1] =~ s/\//-/g;
+        $desc_rcsId = sprintf 'v%s %sT%sZ', @$desc_rcsId;
+    }
+
+
+
+    my $descToClone = $queryHash->{_toClone};
+    if(defined $descToClone) {
+
+        my $descFileToClone = getDescFilePath $descName;
+
+        errExit "Source descriptor '$descName' doesn't exist." if !-f $descFile;
+        errExit "Destination descriptor '$descToClone' already exists." if -f $descFileToClone;
+
+        my $ifh = new FileHandle("< $descFile");
+        errExit "Can't read source descriptor '$descFile': $!\n"  unless defined $ifh;
+
+        my $ofh = new FileHandle("> $descFileToClone.$$");
+        errExit "Can't write destination descriptor '$descFileToClone': $!\n"  unless defined $ofh;
+
+        local $/ = undef;
+        my $text = <$ifh>;
+        print $ofh $text;
+
+        close $ifh;
+        close $ofh;
+        rename "$descFileToClone.$$", $descFileToClone;
+
+        # $descFile   = $descFileToClone;
+        # $descName = $descToClone;
+
+        # $isNew = 1;
+    }
+
+    my ($fh, $json);
+
+    #----------------
+    # Read in info.
+
+    # # Disable inheritance until the dir paths get userid-ified.
+    # sub inherit {
+    #     my ($name0) = @_;
+    #
+    #     $name = "-$name0";
+    #
+    #     my $parentName = $name;
+    #     $parentName =~ s/-[~.\w]+$//;
+    #
+    #     return if $parentName eq '';
+    #
+    #     $parentName =~ s/^-//;
+    #
+    #     inherit($parentName);
+    #
+    #     if(-f "$descDir/$parentName" && !-f "$descDir/$name0") {
+    #         my $cmd = "cp -p $descDir/$parentName $descDir/$name0 && ci -q -l -t-auto-$Pname-$remote_addr $descDir/$name0";
+    #         print STDERR " %> $cmd\n";
+    #         system $cmd;
+    #     }
+    #
+    #     return;
+    # };
+    #
+    # inherit $descName;
+
+    #------------------------
+    # TODO This should call (desc-read)
+
+#----------------------------
+if($XX_use_interpreter_for_read) {
+    $info = $pl->eval('(desc-read _ $name)', {name => $descName});
+    if(exists $info->{_isNew}) {
+        delete $info->{_isNew};
+        $isNew = 1;
+    }
+    $json = $pl->eval('(desc-to-string $d)', {d=>$info});
+}
+#----------------------------
+else {
+    $fh = new FileHandle("< $descFile");
+	errExit("Can't open '$descName': $!")
+		if -f $descFile && !defined $fh;
+
+    if(!defined $fh) {
+        $fh = new FileHandle("< $descFileShared");
+        errExit("Can't open shared '$descName': $!")
+            if -f $descFileShared && !defined $fh;
+    }
+
+    if(defined $fh) {
+        local $/ = undef;
+        $json = <$fh>;
+        close $fh;
+
+        $info = eval { JSON->new->relaxed->decode($json) };
+        errExit if $@;
+    }
+    else {
+        $info = { };
+    }
+}
+#----------------------------
+
+    if($isNew) {
+        $info->{'rcs-id'}     = sprintf '$%s$', 'Id';
+        $info->{_dateCreated} = scalar localtime;
+        $info->{_useCount}    = 0;
+    }
+
+
+    # At this point we have the descriptor loaded in $info.
+    my $path0List = $pl->eval('(hash-paths $_)', {_ => $info });
+
+
+    #----------------
+    # Possibly modify info.
+    my $something_changed = $isNew;
+
+    # Drop the query string into the hash identified by $mapName
+    $qsInfo = $info;
+    if(defined $mapName && $mapName ne '') {
+        map {
+            my $i = $qsInfo->{$_};
+            unless(defined $i && ref $i eq 'HASH') {
+                $i = { };
+                $qsInfo->{$_} = $i;
+                ++$something_changed;
+            }
+            $qsInfo = $i;
+        } split '/', $mapName;
+    }
+
+if(defined $DPL_userid) {
+    sub trim { my ($s) = @_; $s =~ s/^\s+//; $s =~ s/\s+$//; $s =~ s/\r//gs; return $s };
+
+    map {
+        my $new = trim $queryHash->{$_};
+
+        if($qsInfo->{$_} ne $new) {
+            $qsInfo->{$_} = $new;
+            ++$something_changed;
+        }
+    } grep { !/^_/ } keys %$queryHash;
+
+    my $newField = $queryHash->{_newField};
+    # print STDERR " -- $Pname: newField: '$newField'\n"  if defined $newField;
+    if(defined $newField && $newField ne '') {
+        $qsInfo->{$newField} = '';
+        ++$something_changed;
+    }
+
+
+    my $doomedField = $queryHash->{_delete};
+    if(defined $doomedField) {
+        delete $qsInfo->{$doomedField};
+        ++$something_changed;
+    }
+
+    # For some reason null name/value pairs are inserted from somewhere. Zap 'em.
+    if(exists $qsInfo->{''}) {
+        delete $qsInfo->{''};
+        ++$something_changed;
+    }
+
+
+    #----------------
+    # Write out modified info.
+    # TODO This should call (desc-write)
+
+    if($something_changed) {
+        ++$info->{_useCount};
+        printf STDERR " -- $Pname: Something changed. useCount: %d, something_changed: %d\n", $info->{_useCount}, $something_changed;
+
+#--------------------
+if($XX_use_interpreter_for_write) {
+        $actionDescRaw = $pl->eval('(desc-write $d $dname) (desc-to-string (desc-read _ $dname {reload 1}))', {d=>$info, dname=>$descName});
+}
+#--------------------
+else {
+        $json = JSON->new->pretty->canonical->encode($info);
+
+        my $dir = $descFile;
+        $dir =~ s~/.*?$~~; #/
+
+        if(! -d $dir) { mkpath $dir }
+        chmod 0777, $dir;
+
+        $fh = new FileHandle("> $descFile.$$");
+        die " !! $Pname: Can't write to descritpor file '$descFile.$$: $!"
+            unless defined $fh;
+
+        print $fh $json;
+        close $fh;
+        rename "$descFile.$$", $descFile;
+
+        # Checkpoint this edit.
+        my $cmd = '';
+        if($isNew) {
+                $cmd = "ci -q -l -t-auto-$Pname-$remote_addr $descFile ;";
+        }
+        $cmd = "$cmd rcs -q -l $descFile ; ci -q -f -mauto-$Pname-$remote_addr -l $descFile";
+        system $cmd;
+
+        # $msg = "$msg <font color='#20c040'> !! NEW !!</font>" if $isNew;
+
+        $fh = new FileHandle(" < $descFile");
+        local $/ = undef;
+        $actionDescRaw = <$fh>; chomp $actionDescRaw;
+        close $fh;
+}
+#--------------------
+    }
+    else { 
+        $actionDescRaw = $json;
+        # printf STDERR " -- $Pname: Nothing changed...\n";
+    }
+}
+else {
+    $actionDescRaw = $json;
+}
+
+
+
+    my $mapFrag = '';
+    $mapFrag = (defined $mapName && $mapName ne '') ?
+        sprintf(" current map path: <tt>%s %s</tt>", linkify('/'), linkify($mapName)):
+        sprintf(" current map path: <tt>%s</tt>", linkify('/'));
+
+    my $_mapName = defined $mapName && $mapName ne ''? "/$mapName": '';
+
+    my $cleanHereLink = "<a href='$thisURL$_mapName'>here</a>";
+    my $cloneHereLink = "<a href='/api/$Pname'>here</a>";
+
+
+
+
+
+#----------------------------------------------
+if(1) {
+    my $workspaceForm0HTML = <<FINI;
+<form method='GET' action='/api/$Pname' name='pickWorkspace'>
+<input type='hidden' name='_mapName' value='/'/>
+<input type='hidden' name='_descName' value=''/>
+<select name="_workspaceName" onChange="window.document.pickWorkspace.submit()">
+     <option value="">   Select... </option>
+FINI
+
+    my $workspaceFormBodyHTML = selectionOptionListHTML $workspaceName, $workspaceNameList;
+
+    my $workspaceForm1HTML = <<FINI;
+</select> <br/>
+ </form>
+FINI
+
+    $workspaceFormHTML = <<FINI;
+$workspaceForm0HTML
+$workspaceFormBodyHTML
+$workspaceForm1HTML
+FINI
+}
+#----------------------------------------------
+else {
+    my $workspaceFormBodyHTML = selectionOptionListHTML $workspaceName, $workspaceNameList;
+    $workspaceFormHTML = selectionFormHTML 'pickDescriptor', $workspaceFormBodyHTML;
+}
+#----------------------------------------------
+
+
+
+#----------------------------------------------
+if(1) {
+    my $descForm0HTML = <<FINI;
+<form method='GET' action='/api/$Pname' name='pickDescriptor'>
+<input type='hidden' name='_mapName' value='/'/>
+<select name="_descName" onChange="window.document.pickDescriptor.submit()">
+     <option value="">   Select... </option>
+FINI
+
+    my $descFormBodyHTML = selectionOptionListHTML $descName, $pl->evalAll("(desc-list *)", {});
+
+    my $descForm1HTML = <<FINI;
+</select> <br/>
+ </form>
+FINI
+
+    $descFormHTML = <<FINI;
+$descForm0HTML
+$descFormBodyHTML
+$descForm1HTML
+FINI
+}
+#----------------------------------------------
+else {
+    my $descFormBodyHTML = selectionOptionListHTML $descName, $pl->evalAll("(desc-list *)", {});
+    $descFormHTML = selectionFormHTML 'pickDescriptor', $descFormBodyHTML;
+}
+#----------------------------------------------
+
+
+
+#----------------------------------------------
+if(1) {
+    my $pathForm00HTML = <<FINI;
+<form method='GET' action='/api/$Pname' name='pickPath'>
+<input type='hidden' name='_descName' value='$descName'/>
+<select name="_mapName" onChange="window.document.pickPath.submit()">
+FINI
+
+    my $pathForm00BodyHTML = selectionOptionListHTML $_mapName, $path0List;
+
+
+    my $pathForm01HTML = <<FINI;
+</select> <br/>
+ </form>
+FINI
+
+
+    $pathFormHTML = <<FINI;
+$pathForm00HTML
+$pathForm00BodyHTML
+$pathForm01HTML
+FINI
+}
+#----------------------------------------------
+else {
+    my $pathForm00BodyHTML = selectionOptionListHTML $_mapName, $path0List;
+    $pathFormHTML = selectionFormHTML 'pickPath', $pathForm00BodyHTML;
+}
+#----------------------------------------------
+
+
+    my $cloneFormHTML = !defined $DPL_userid? '': <<FINI;
+<form method='GET' action='$thisURL' name='cloneDescriptor'>
+<font color='#008000'>
+to create a clone of this descriptor, enter the new name here:
+<input type='text' name='_toClone' columns='40' onChange="window.document.cloneDescriptor.submit()"/>
+Then click $cloneHereLink to locate the new descriptor for editing.
+</font>
+</form>
+FINI
+
+    my $navFormHTML = <<FINI;
+<table border="0" width="100%" cellspacing="0" cellpadding="0">
+<tr> <td width="33%"> <b>current workspace</b> <td width="33%"> <b>current descriptor</b> </td> <td> <b>current path</b> </td> </tr>
+<tr> <td width="33%"> $workspaceFormHTML </td> <td width="33%"> $descFormHTML </td>             <td> $pathFormHTML </td> </tr>
+</table>
+FINI
+
+    # $thisHTML = $navFormHTML .  $cloneFormHTML  if !defined $thisHTML;
+    $thisHTML = $navFormHTML if !defined $thisHTML;
+
+
+
+    $msg = $thisHTML;
+    $msg2 = !defined $DPL_userid? '': <<FINI;
+to create a new Map, click $cleanHereLink, then add <tt>/NewMapName</tt> to the end of the URL in the address bar.<br/>
+FINI
+}
+
+
+
+
+
+
+
+
+
+
+my $altNavFormHTML = '';
+
+sub
+ListAllDescriptors {
+    if(!defined $workspaceName) { errExit "Workspace name should be define dby now..." }
+
+    #----------------------------------------------
+    if(1) {
+        my $workspaceForm0HTML = <<FINI;
+<form method='GET' action='/api/$Pname' name='pickWorkspace'>
+<input type='hidden' name='_mapName' value='/'/>
+<input type='hidden' name='_descName' value=''/>
+<select name="_workspaceName" onChange="window.document.pickWorkspace.submit()">
+     <option value="">   Select... </option>
+FINI
+
+
+        my $workspaceFormBodyHTML = selectionOptionListHTML($workspaceName, $workspaceNameList);
+
+        my $workspaceForm1HTML = <<FINI;
+</select> <br/>
+ </form>
+FINI
+
+        $workspaceFormHTML = <<FINI;
+$workspaceForm0HTML
+$workspaceFormBodyHTML
+$workspaceForm1HTML
+FINI
+    }
+    #----------------------------------------------
+    else {
+        my $workspaceFormBodyHTML = selectionOptionListHTML($workspaceName, $workspaceNameList);
+        $workspaceFormHTML = selectionFormHTML 'pickDescriptor', $workspaceFormBodyHTML;
+    }
+    #----------------------------------------------
+
+    $altNavFormHTML = <<FINI;
+<table border="0" width="100%" cellspacing="0" cellpadding="0">
+<tr> <td width="33%"> <b>current workspace</b> <td width="33%"> <b>current descriptor</b> </td> <td> <b>current path</b> </td> </tr>
+<tr> <td width="33%"> $workspaceFormHTML </td> <td width="33%"> $descFormHTML </td>             <td> $pathFormHTML </td> </tr>
+</table>
+FINI
+
+
+    $msg = "all descriptors";
+    $msg2 = "to create a new Descriptor, add <tt>/NewName</tt> to the end of the URL in the address bar.";
+    $msg3 = ''; # "<br/>to copy an existing Descriptor, click its name below, then add <tt>-NewSuffix</tt> to the end of the URL in the address bar.";
+
+    my $doomedDesc = $queryHash->{_deleteDesc};
+    if(defined $doomedDesc) {
+        $pl->eval('(desc-write () $dname)', {dname=>$doomedDesc});
+    }
+
+	my @descList       = @{$pl->evalAll('(desc-list *)', {})};
+	my $descREADMEInfo =   $pl->evalAll('
+		(desc-read self README.info)
+		(if (undef? $info) (do
+			(desc-read   self README.info.null {no-cache 1 no-on-load 1})
+			(desc-write $self README.info)
+			(desc-read   self README.info {reload 1})
+    	    (update)))
+		(info)', {});
+
+
+	my $nDesc = scalar @descList;
+
+	my $msgInfo = sprintf '%d descriptor%s', $nDesc, $nDesc==1?'':'s';
+
+    $descListHTML = "$msgInfo\n\n" . join("\n",
+                        map {
+                            my $descName = $_;
+
+                            my $descFile = getDescFilePath $descName;
+
+                            my @s = stat $descFile;
+                            if($!) { errExit "Can't stat($descFile): $!"  }
+
+                            my $mtime = scalar localtime $s[9];
+                            my $fsize = $s[7] ; #/1024;
+
+                            my $editLink = sprintf "<a href='/api/%s/%s'>%s</a>", $Pname,      $descName, (defined $DPL_userid? 'edit': 'view');
+                            my $runLink  = sprintf "<a href='/api/%s/%s'>%s</a>", $Pname_dplx, $descName, 'run';
+                                            #                     1              2          3   4
+                            my $zapLink  = sprintf "<a href='/api/%s?_deleteDesc=%s' title='%s'>%s</a>",
+                                                $Pname, urlencode($descName), "permanently delete descriptor &apos;$descName&apos;", '.';
+                                            #   1       2                     3                                                       4
+
+                            $zapLink = "<font color='#ff0000'>x${zapLink}x</font>";
+
+#-----------------------------
+                            #        1   2       3   4   5      6      7
+                            sprintf("%s  % 10d   %s  %s  %s  <b>%s</b> %s",
+                                    $mtime, $fsize,         # 1 2
+                                    $editLink,              # 3
+                                    $runLink,               # 4
+                                    $descName,              # 5
+                                    exists $descREADMEInfo->{$descName}? $descREADMEInfo->{$descName}: '',   # 6
+                                    $zapLink,               # 7
+                            )
+#-----------------------------
+                        } @descList
+                    );
+}
+
+
+if(defined $descName && $descName ne '') { EditOneDescriptor  }
+else                                     { ListAllDescriptors }
+
+
+#---------------------------------------------------------------------
+
+sub
+tabLinkHTML {
+    my ($url, $label, $title) = @_;
+    $title = ''  unless defined $title;
+    $title = " title=\"$title\""  if $title ne '';
+
+    return "<b>[</b>&nbsp;<a href=\"$url\"$title>$label</a>&nbsp;<b>]</b> ";
+}
+
+
+$descListHTML = 
+    $altNavFormHTML  . 
+    '<hr/>'          .
+    "<h3>$msg</h3>"  .
+    "<p><font color='#008000'>$msg2$msg3</font></p>" . 
+    "<pre>\n$descListHTML\n</pre>" .
+    '<hr/>'  if $descListHTML;
+
+my $maxURILen    = 8192 - 27;  # see max-uri it's really 8165, but hey...
+my $reqURILength = length($ENV{REQUEST_URI});
+
+my $fullness = length($ENV{REQUEST_URI}) / $maxURILen;
+$fullness = 1 if $fullness > 1;
+$fullness = $fullness ** 20;
+
+# with no CSS
+# $backgroundColour = sprintf '#%02x%02x%02x', 0xff * $fullness, 0, 0;
+# with CSS
+  # $backgroundColour = sprintf '#%02x%02x%02x', 0xff, 0xff * (1-$fullness), 0xff * (1-$fullness);
+    $backgroundColour = sprintf '#%02x%02x%02x', 0xff * $fullness, 0, 0;
+
+
+my $actionDescRawXE = xmlencode $actionDescRaw;
+# $actionDescRawXE =~ s/\\n/\n/gs;
+my @lines_actionDescRaw = split(/\n/, $actionDescRawXE);
+my $nlines_actionDescRaw = scalar @lines_actionDescRaw;
+
+$actionDescHTML = join("\n", (
+        '<pre>',
+        exists $ENV{REQUEST_URI}? 
+            sprintf("request uri len: %d bytes, %d remaining (%02x)",
+                $reqURILength, $maxURILen-$reqURILength, 0xff * $fullness) :
+            "no request uri available",
+
+         sprintf("descriptor size: %d bytes, %d lines", length $actionDescRaw, $nlines_actionDescRaw),
+        '</pre>',
+
+        sprintf("<pre id='descriptor'>%s</pre>", $actionDescRawXE),
+     )) if $actionDescRaw;
+
+
+my $formHMTL = '';
+
+sub
+RenderEditingPage {
+    my $pi = $descName;
+    $pi = "$pi/$mapName" if defined $mapName && $mapName ne '';
+
+    my $saveHTML = '';
+    
+    my $formHTML0 = <<FINI;
+<form method='GET' action='/api/$Pname/$pi'>
+<!-- table border='0' align='center' width='95%' bgcolor='#181818'><tr><td -->
+<table border='0' align='center' width='95%' cellspacing='0' cellpadding='2'>
+FINI
+
+
+    #----------------------------------------------------------------------------------------------------
+    my $mapListHeaderHTML = <<FINI;
+<h3>Maps</h3>
+<!-- tr> <td colspan='3'><h3>Maps</h3></td> </tr -->
+FINI
+
+    my $mapListHTML = join("\n", map {
+        my $name = $_;
+        my $nameUE       = urlencode $name       if defined $name;
+        my $mapNameUE    = urlencode $mapName    if defined $mapName;
+        my $descNameUE = urlencode $descName if defined $descName;
+
+		my $mapDesc = $qsInfo->{$name}->{README};
+		if(defined $mapDesc) {
+			$mapDesc = [ split(/\n+/, $mapDesc) ];
+			$mapDesc = shift @$mapDesc;
+		}
+		else {
+			$mapDesc = '&nbsp;';
+		}
+
+        my $mFrag   = $name;
+        my $mFragUE = $nameUE;
+        $mFrag   =   "$mapName/$mFrag"    if defined $mapName   && $mapName   ne '';
+        $mFragUE = "$mapNameUE/$mFragUE"  if defined $mapNameUE && $mapNameUE ne '';
+
+        my $mFrag2UE = '';
+        $mFrag2UE = "/$mapNameUE"  if defined $mapNameUE && $mapNameUE ne '';
+
+        my $mFrag2 = '';
+        $mFrag2 = "/$mapName"  if defined $mapName && $mapName ne '';
+<<FINI;
+<tr>
+<td colspan='1' width='25%' align='left'>
+<a href='/api/$Pname/$descNameUE/$mFrag'><b>$_</b></a>
+</td>
+
+<td>$mapDesc</td>
+<td width='10%' colspan='1' align='right'>
+<font color='#ff0000'>
+ delete <a title='permanently delete &apos;$mFrag&apos; map' href='/api/$Pname/$descNameUE$mFrag2?_delete=$nameUE'><b>.</b></a>
+</font>
+</td>
+</tr>
+FINI
+    } sort grep { !/^_/ && ref $qsInfo->{$_} eq 'HASH' && $_} keys %$qsInfo);
+
+    if($mapListHTML eq '') { $mapListHeaderHTML =~ s/Maps/No Maps/ }
+
+
+    #----------------------------------------------------------------------------------------------------
+    my $listListHeaderHTML = <<FINI;
+<h3>Lists</h3>
+<!-- tr> <td colspan='3'></td> </tr>
+<tr> <td colspan='3'><h3>Lists</h3></td> </tr -->
+FINI
+
+    my $listListHTML = join("\n", map {
+        my $name = $_;
+        my $nameUE       = urlencode $name       if defined $name;
+        my $mapNameUE    = urlencode $mapName    if defined $mapName;
+        my $descNameUE = urlencode $descName if defined $descName;
+
+        my $mFrag   = $name;
+        my $mFragUE = $nameUE;
+        $mFrag   =   "$mapName/$mFrag"    if defined $mapName   && $mapName   ne '';
+        $mFragUE = "$mapNameUE/$mFragUE"  if defined $mapNameUE && $mapNameUE ne '';
+
+        my $mFrag2UE = '';
+        $mFrag2UE = "/$mapNameUE"  if defined $mapNameUE && $mapNameUE ne '';
+
+        my $mFrag2 = '';
+        $mFrag2 = "/$mapName"  if defined $mapName && $mapName ne '';
+
+<<FINI;
+<tr>
+<td colspan='1' width='25%' align='left'>
+<b>$_</b>
+</td>
+
+<td>&nbsp;</td>
+<td width='10%' colspan='1' align='right'>
+<font color='#ff0000'>
+ delete <a title='permanently delete &apos;$mFrag&apos; map' href='/api/$Pname/$descNameUE$mFrag2?_delete=$nameUE'><b>.</b></a>
+</font>
+</td>
+</tr>
+FINI
+    } sort grep { !/^_/ && ref $qsInfo->{$_} eq 'ARRAY' && $_} keys %$qsInfo);
+
+    if($listListHTML eq '') { $listListHeaderHTML =~ s/Lists/No Lists/ }
+
+
+    #----------------------------------------------------------------------------------------------------
+    my $fieldListHeaderHTML = <<FINI;
+<h3>Fields</h3>
+<!-- tr> <td colspan='3'></td> </tr>
+<tr> <td colspan='3'><h3>Fields</h3></td> </tr -->
+FINI
+
+    my $fieldListHTML = join("\n", map {
+        $saveHTML = !defined $DPL_userid? '': <<FINI;
+<tr>
+<td colspan='3'><input type='submit' value='Save Often'/></td>
+</tr>
+FINI
+        my $name = $_;
+
+        my $nameUE     = urlencode $name     if defined $name;
+        my $mapNameUE  = urlencode $mapName  if defined $mapName;
+        my $descNameUE = urlencode $descName if defined $descName;
+
+        my $mFrag = $nameUE;
+        $mFrag = "$mapNameUE/$mFrag"  if defined $mapNameUE && $mapNameUE ne '';
+        my $mFrag2 = '';
+        $mFrag2 = "/$mapName"  if defined $mapName && $mapName ne '';
+        my $mFrag2UE = '';
+        $mFrag2UE = "/$mapNameUE"  if defined $mapNameUE && $mapNameUE ne '';
+
+        my $text = $qsInfo->{$_};
+
+        my @text = split /\r?\n/, $text;
+        my $rows = @text;
+        my $cols = 0;
+        map { $cols = length $_ if $cols < length $_ } @text;
+        # $rows += 1;
+        $cols += 2;
+
+        $cols = 40 if $cols < 40;
+
+
+        my $renderHTML = '';
+        my $names_text = '';
+        my $names_text_html = '';
+
+        if($name =~ /\.html~?$/) {
+            $renderHTML = <<FINI;
+<tr>
+<td>&nbsp;</td>
+<td width='80%' bgcolor='#303030''>
+$text
+</td>
+<td>&nbsp;</td>
+</tr>
+FINI
+        }
+        else {
+          if($name ne 'rcs-id' && $name ne 'README') {
+            my $names     = $pl->eval('(get-called-fns $_)', {_ => $text});
+            if(exists $names->{exception}) {
+                $names_text = $names->{exception}->{exception};
+                $names_text = $pl->eval(',(desc-to-string $_)', {_ => $names->{exception}})
+                    if ref $names_text;
+                $names_text = "<pre class='exception'>$names_text</pre>";
+            }
+            else {
+                $names_bi  = $names->{builtins};
+                $names_def = $names->{defined};
+            }
+
+
+            $names_text =
+                            join("<br/>\n", map {
+                                    my $spec = $descIdx->{'fn-name-to-desc-name-path'}->{$_};
+
+                                    if($spec) {
+                                        my ($descName, $path) = split /\s+/, $spec;
+
+                                        $path = '' if $path eq '/';
+
+                                        sprintf '<a href="/api/%s/%s%s#_%s">%s</a>', $Pname, $descName , $path, $_, $_
+                                    }
+                                    else {
+                                        $_
+                                    }
+                            } sort @$names_def) .
+                          '<br/><hr/>' . 
+                          join("<br/>\n", map { "<a href='/api/$Pname_dplx/man/$_'>$_</a>" } sort @$names_bi) 
+                if !$names_text;
+
+            if(scalar keys %$names) {
+                $names_text_html = <<FINI;
+<table>
+  <!-- <tr><td bgcolor='#404040'>Calls:</td></tr> -->
+  <tr><td align='left'> <font color="#400040" size="-1">$names_text</font> </td></tr>
+</table>
+FINI
+            }
+          }
+
+            $text = xmlencode $text;
+            $renderHTML = <<FINI;
+<tr> <td width='25%' valign='top' align='right'><a name='_$name'></a> <b>$name</b>: <br/> $names_text_html </td>
+
+<td valign='top'><textarea type='text' rows='$rows' cols='$cols' name='$name'>$text</textarea></td>
+<td align='right' valign='top' width='10%'>
+<font color='#ff0000'>
+delete <a title='permanently delete &apos;$name&apos; field' href='/api/$Pname/$descNameUE$mFrag2?_delete=$nameUE'><b>.</b></a>
+</font>
+</td>
+</tr>
+FINI
+        }
+
+        $renderHTML;
+    } sort grep { !/^_/ && !ref $qsInfo->{$_} && $_} keys %$qsInfo);
+
+    if($fieldListHTML eq '') { $fieldListHeaderHTML =~ s/Fields/No Fields/ }
+
+
+    #----------------------------------------------------------------------------------------------------
+    my $newFieldHTML = !defined $DPL_userid? '' : <<FINI;
+<tr bgcolor='#202020'>
+<td><font color='#008000'>to add a new Field,<br/>enter its name here:</font></td>
+<td colspan='2'><input type='text' name='_newField' size='25' value=''/></td>
+</tr>
+FINI
+
+    my $newMapHTML = <<FINI;
+<tr>
+<td colspan='3' width='100%'> <p><font color='#008000'>$msg2$msg3</font></p> </td>
+</tr>
+FINI
+
+    my $newListHTML = !defined $DPL_userid? '': <<FINI;
+<tr>
+<td colspan='3' width='100%'> <p><font color='#008000'>
+    to create a new List,
+       try again later :(
+</font></p> </td>
+</tr>
+FINI
+
+    #----------------------------------------------------------------------------------------------------
+    my $formHTML1 = <<FINI;
+</table>
+<!-- /td></tr></table -->
+</form>
+FINI
+
+
+    #----------------------------------------------------------------------------------------------------
+    $formHTML = 
+        # '<hr/>'         .
+        $thisHTML       .
+
+        $mapListHeaderHTML  .
+        $formHTML0      .
+        $newMapHTML         .
+        $mapListHTML        .
+        $formHTML1      .
+
+        $fieldListHeaderHTML   .
+        $formHTML0      .
+        $newFieldHTML   .
+        $saveHTML       .
+        $fieldListHTML  .
+        $saveHTML       .
+        $formHTML1      .
+
+        $listListHeaderHTML .
+        $formHTML0      .
+        $newListHTML        .
+        $listListHTML       .
+        $formHTML1      .
+
+        '' ; #'<hr/>';
+}
+
+if(defined $descName && $descName ne '') { RenderEditingPage }
+
+
+
+my $aName = defined $descName? "/$descName": '';
+$descName = '' unless defined $descName;
+
+my $date     = scalar localtime;
+$mapName0 = defined $mapName? $mapName: '';
+
+my $evalExpr = $descName eq ''?  '': <<FINI;
+// $date
+
+(desc-read self $descName)
+
+// (hash-rename \$self /$mapName0 OldName NewName)
+// (hash-move   \$self /$mapName0 OldName NewPath NewName)
+// (hash-set \$self /$mapName0 NewName (hash-get \$self OldPath OldName))
+
+(desc-write \$self $descName)
+ok.
+FINI
+
+$evalQS = sprintf('?load=%s', urlencode($evalExpr))
+    if $evalExpr ne '';
+
+$evalQS = '' unless defined $evalQS;
+
+my $log_in_out = defined $DPL_userid? 'logout': 'login';
+
+$ctlHTML = 
+    tabLinkHTML("/api/dplx/user/$log_in_out",        $log_in_out, 'DPL user authentication'      ) .
+    tabLinkHTML("/api/$Pname",                       'all',       'view all descriptors'         ) .
+    tabLinkHTML("/api/$Pname_dplx/man",              'man pages', 'view man pages'               ) .
+    tabLinkHTML("/api/$Pname_dplx/eval$evalQS",      'eval edit', 'edit descriptor content'      ) .
+    tabLinkHTML("/api/$Pname_dplx/$descName",        'run',       'dispatch to descriptor'       ) .
+'';
+
+
+#---------------------------------------------------------------------
+my $ua = $ENV{HTTP_USER_AGENT};
+my $responseMIMEType = 'text/xml';
+
+$titleHTML      = '' unless defined $titleHTML;
+$descListHTML   = '' unless defined $descListHTML;
+$formHTML       = '' unless defined $formHTML;
+$actionDescHTML = '' unless defined $actionDescHTML;
+
+$descListHTML = encode_utf8 $descListHTML;
+
+if(!defined $ua || $ua =~ /Mozilla/ || $ua eq "$Pname/cli" ) {
+
+    my $DPL_userid0 = '';
+    if(defined $DPL_userid) {
+        $DPL_userid0 = " -- $DPL_userid";
+    }
+
+    my $workspaceName0 = '';
+    if(defined $workspaceName) {
+        $workspaceName0 = " ($workspaceName)";
+    }
+
+    my $content =
+    <<FINI;
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">
+<html>
+<head>
+<title>$title</title>
+<meta http-equiv="Content-Type" content="$contentType; charset=$encoding" />
+$css_line
+</head>
+<body link="$foregroundColour" vlink="$vlinkColour" text="$foregroundColour" bgcolor="$backgroundColour">
+<table border="0" width="100%" cellspacing="0" cellpadding="0">
+<tr valign="center">
+<td width="25%" align="left"><b>DPL</b> $dplVersionStr<br/><b>Editor</b> <i>$hostname$DPL_userid0$workspaceName0<i></td>
+<td width="40%" align="center"><b>$titleHTML</b><br/>$desc_rcsId</td>
+<td width="35%" align="right"> <font color="#808080">$ctlHTML</font></td>
+</tr>
+</table>
+
+<!-- 1 -->
+$descListHTML
+<!-- 2 -->
+$formHTML
+<!-- 3 -->
+$actionDescHTML
+<!-- 4 -->
+</body>
+</html>
+FINI
+    print "Content-Type: text/html; charset=UTF-8\r\n";
+    print "\r\n";
+
+    print $content;
+}
+else {
+    print "Content-Type: $responseMIMEType\r\n";
+    print "\r\n";
+
+    print $actionDescRaw;
+}
+
+exit 0;

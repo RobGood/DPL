@@ -1,0 +1,101 @@
+#!/bin/sh -e
+# -*- coding: UTF-8 -*-
+# $Id: dpl-update,v 1.12 2013/04/05 18:15:11 rcgood Exp $  #%^)
+#
+# This is a util to force install DPL.
+# Copyright (C) 2010 Rob Good
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+
+
+Pname="`exec basename $0`"
+Usage="Usage: $Pname [<SourceHost>]"
+
+# Where to get your updates from.
+                              SourceHost="$1"
+if [ -z "$SourceHost" ]; then SourceHost='srvdevlnx01'; fi
+
+
+# Destination directory for programs, referenced in in $PATH.
+                            binDir='/usr/local/bin'			# standard
+if [ ! -d $binDir  ]; then  binDir="$HOME/bin"; fi			# personal
+
+# Destination directory for perl modules, referenced in in $PERL5LIB.
+                           perlDir='/usr/local/lib/perl'	# standard
+if [ ! -d $perlDir ]; then perlDir="$HOME/lib/perl"; fi		# personal
+if [ ! -d $perlDir ]; then perlDir="$HOME/perl"; fi		    # alternate
+
+# Web server's (Apache's) cgi-bin directory.
+                            cgiDir="/srv/www/cgi-bin"		# Cygwin
+if [ ! -d $cgiDir  ]; then  cgiDir='/var/www/cgi-bin'; fi	# Fedora
+if [ ! -d $cgiDir  ]; then  cgiDir="/usr/lib/cgi-bin"; fi	# Ubuntu ?
+
+
+
+# Fail if destination directories aren't writable.
+chkdir() {
+	if [ ! -w "$1" ]; then
+		echo " !! $Pname: Can't write to dir $1" 1>&2
+		exit 1
+	fi
+}
+
+
+if [ ! -d $cgiDir/descriptor-dir/.import ]; then
+	mkdir -p $cgiDir/descriptor-dir/.import
+fi
+
+chkdir $perlDir
+chkdir $binDir
+chkdir $cgiDir
+chkdir $cgiDir/descriptor-dir
+chkdir $cgiDir/descriptor-dir/.import
+
+
+# Get it.
+
+# Make a place in your home directory to unpack dists.
+cd && mkdir -p DPL-dists && cd DPL-dists
+
+# Get dist it and unpack it.
+wget -q -O - "http://$SourceHost/api/eval?expr=(get-DPL-dist)" | tar xzpf -
+
+# Sort existing dirs by mod time to find out which one we just got.
+dir=`ls -dtr DPL* | tail -1`
+
+# Show some Progress.
+echo " ** $Pname: Updating to $dir..." 1>&2
+
+
+# Deploy it.
+
+cd $dir
+
+# Make sure we can stomp anything we need to.
+chmod +w $perlDir/PrimaLisp.pm                    || true
+chmod +w $binDir/dpl  $binDir/dplx $binDir/dpld   || true
+chmod +w $cgiDir/dple $cgiDir/dplx                || true
+chmod +w $cgiDir/descriptor-dir/.import/Core.dpli || true
+
+# Stomp!
+cp -pf  PrimaLisp.pm             $perlDir
+cp -pf  dpl  dplx dpld           $binDir
+cp -pf  dple dplx                $cgiDir
+cp -pf  descriptor-dir/*         $cgiDir/descriptor-dir
+cp -pfr descriptor-dir/.import   $cgiDir/descriptor-dir
+
+echo " ** $Pname: You've been updated."
+
+exit

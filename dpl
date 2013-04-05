@@ -1,0 +1,266 @@
+#!/usr/bin/perl -w
+# -*- coding: UTF-8 -*-
+# $Id: dpl,v 1.48 2013/04/05 18:15:11 rcgood Exp $  #%^)
+#
+# This is the commandline interface/REPL for DPL.
+# Copyright (C) 2010-2013  Rob Good
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+
+BEGIN {
+    push @INC, '.', '/usr/local/lib/perl';
+    $ENV{PATH} = "$ENV{PATH}:/usr/local/bin:/usr/bin:/bin";
+}
+
+(my $Pname = $0) =~ s+^.*/++;
+my $Usage = "Usage: $Pname [-d] [-h] [-v] [-q] [-no-init] [-isock <port>] [-desc <dir>] [-eval <exprs>]  [<inFile>]";
+
+use FileHandle;
+use Socket;
+
+use PrimaLisp;
+use Time::HiRes qw(time);
+
+
+# Interpreter Diagnostics
+# 'quiet' means the interpreter repl adds nothing to the output streams.
+# 'verbose' means the interpreter repl adds more to the output streams.
+# (they aren't exactly opposites)
+# By default, the interpreter repl adds some stuff to the output streams, e.g. prompt and timing info...)
+my $argQuiet   = 0;
+my $argVerbose = 1;
+my $argDebug   = 0;
+my $argHelp    = 0;
+my $argVersion = 0;
+my $argISock;
+my $argUpdate;
+
+my $argNoInit;
+my $argEval;
+my $argDesc;
+
+while(@ARGV) {
+    my $arg = shift;
+
+    if($arg !~ /^-/) {
+        unshift @ARGV, $arg;
+        last;
+    }
+
+    if($arg eq '-q') {
+        $argQuiet   = 1;
+        $argVerbose = 0;
+    }
+    elsif($arg eq '-v') {
+        $argQuiet   = 0;
+        $argVerbose = 1;
+    }
+    elsif($arg eq '-d') {
+        $argDebug   = 1;
+    }
+    elsif($arg eq '-h') {
+        $argHelp    = 1;
+    }
+    elsif($arg eq '-version') {
+        $argVersion = 1;
+    }
+    elsif($arg eq '-isock') {
+        $argISock = shift;
+    }
+    elsif($arg eq '-update') {
+        $argUpdate  = shift;
+		$argUpdate = '' unless defined $argUpdate;
+    }
+    elsif($arg eq '-no-init') {
+        $argNoInit  = 1;
+    }
+    elsif($arg eq '-eval') {
+        $argEval = shift;
+    }
+    elsif($arg eq '-desc') {
+        $argDesc = shift;
+    }
+    
+    
+    else { die " !! $Usage\n" }
+}
+
+
+my $cgiDir = PrimaLisp::getCGIDir;
+
+my $descDir =    './descriptor-dir'        if $0 eq './dpl' && -d './descriptor-dir';
+$descDir = $argDesc                        if ! defined $descDir &&  defined $argDesc;
+$descDir = $ENV{DPL_DESC_DIR}              if ! defined $descDir && exists $ENV{DPL_DESC_DIR} && -d $ENV{DPL_DESC_DIR};
+$descDir = "$ENV{HOME}/descriptor-dir"     if ! defined $descDir && exists $ENV{HOME} && -d "$ENV{HOME}/descriptor-dir";
+$descDir = "$cgiDir/descriptor-dir"        if ! defined $descDir && -d "$cgiDir/descriptor-dir";
+
+
+my $inFile = shift @ARGV
+  unless defined $argEval;
+
+my ($quiet, $verbose) = (0, 0);
+ $quiet             =  1       if  defined $inFile && !$argVerbose;
+($verbose, $inFile) = (1, '-') if !defined $inFile;
+ $verbose           = 0        if $quiet;
+
+
+
+sub
+errExit {
+	print  STDERR " !! $Pname: $@\n" if $@ && ref $@ ne 'HASH';
+	printf STDERR " !! $Pname: Exception: %s, callstack: \n%s\n", $@->{exception}, join("\n", @{$@->{callstack}}) if exists $@->{exception};
+	print  STDERR " !! $Pname: Return: $@->{value}\n"        if exists $@->{value};
+	die if $@;
+}
+
+#------------------------------------------------------------------------------------------------------------------------------------------
+
+if(defined $argISock) {
+	# REPL for socket access, e.g.  $cmd = "ssh $host dpl -isock"
+
+	#TODO make $ifh available for writing... not write to STDOUT without mods.`
+	# child: nc -l -p port
+	# read expressions from child, write values to child
+
+	my $port = $argISock;
+	my $info = {};
+
+	printf STDERR " ** $Pname [$$]: ISock starting...\n";
+
+    my $sock = new FileHandle;
+	eval {
+      socket $sock, PF_INET, SOCK_STREAM, getprotobyname('tcp') or die "$!\n";
+      setsockopt $sock, SOL_SOCKET, SO_REUSEADDR, pack("l", 1)  or die "$!\n";
+      bind $sock, sockaddr_in($port, INADDR_ANY)                or die "$!\n";
+      listen $sock, SOMAXCONN                                   or die "$!\n";
+    };
+	if($@) {
+		print STDERR " !! $Pname: $@";
+		exit 1;
+	}
+
+	printf STDERR " ** $Pname [$$]: ISock server starting...\n";
+
+	for(;;) {
+	    my $clSock = new FileHandle;
+
+		print STDERR " -- $Pname [$$]: waiting for connections on port $port\n";
+		my $clAddr = accept $clSock, $sock;
+		printf STDERR " -- $Pname [$$]: got connection, clAddr: %s\n", unpack('H8', $clAddr);
+
+		$pid = fork;
+		unless(defined $pid) {
+			close $clSock;
+			print STDERR " !! $Pname [$$]: fork()1 failed: $!\n";
+			sleep 1;
+			next;
+		}
+
+		if($pid) {
+			close $clSock;
+			waitpid($pid, 0);
+			next;
+		}
+
+		# child here...
+		$pid = fork;
+		unless(defined $pid) {
+			close $clSock;
+			print STDERR " !! $Pname [$$]: fork()2 failed: $!\n";
+			exit 1;
+		}
+
+		if($pid) {
+			close $clSock;
+			exit 0;
+		}
+
+		# grandchild here...
+
+		$clSock->autoflush(1);
+
+		print STDERR " -- $Pname [$$]: Starting DPL session...\n";
+		my $pl = eval { new PrimaLisp($clSock, $clSock, 1) };
+		errExit if $@;
+
+		delete $pl->{noInit};
+		eval { $pl->setDescDir($descDir) }; 
+		errExit if $@;
+
+
+		# Let listener know we're ready.
+		$pl->eval("(print-banner 'ISock Evaluator')", {});
+
+		while(!eof $clSock) {
+			my $exprLen = <$clSock>;
+			chomp $exprLen;
+			my $expr;
+			read $clSock, $expr, $exprLen;
+
+			my $value = eval { $pl->evalAll($expr, {}) };
+
+			$value = { value => $value, exception => $@ };
+
+			$value = $pl->eval('(desc-to-string $value)', {value => $value});
+
+			print $clSock length $value, "\n";
+			print $clSock $value;
+		}
+
+		print STDERR " -- $Pname [$$]: Ending DPL session...\n";
+
+		CORE::exit 0;
+	}
+
+	exit 0;
+}
+
+#------------------------------------------------------------------------------------------------------------------------------------------
+
+my $ifh;
+
+$ifh = new FileHandle("< $inFile");
+die " !! $Pname: Can't read '$inFile': $!\n"
+    unless defined $ifh;
+
+my $pl = eval { new PrimaLisp($ifh, undef, 1) };
+errExit if $@;
+
+my $dpl_Pname = $inFile;
+if( $dpl_Pname ne '-') { $dpl_Pname =~ s~^.*/~~ }
+
+$pl->setDebug($argDebug);
+$pl->setShowTimes(-t $ifh? 1: 0);
+
+delete $pl->{noInit};
+eval { $pl->setDescDir($descDir) }; 
+errExit if $@;
+
+if(-t $ifh && !$quiet && !defined $argEval) {
+    $pl->eval("(print-banner Evaluator)", {});
+}
+
+my $expr = '(= Pname $Pname) (= args $args) (repl)';
+$expr    = '(map-list println (help))'       if $argHelp;
+$expr    = '(emit(desc-to-string(version)))' if $argVersion;
+$expr    = "(emit (desc-to-string (update-DPL-dist $argUpdate)))" if defined $argUpdate;
+$expr    = $argEval if defined $argEval;
+
+eval { $pl->evalAll($expr, { args => \@ARGV, argv => \@ARGV, Pname => $dpl_Pname}) };
+close $ifh;
+
+errExit if $@;
+
+exit 0;
