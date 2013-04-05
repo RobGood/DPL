@@ -1,0 +1,12 @@
+This is some Apache config to enable DPL web access.
+
+Someday when DPL has a standalone HTTP(S) server this won't be needed.
+
+Basically, as root, unpack sites.tar.gz under /etc/apache2
+
+Run:
+  ./make-sites-tar-gz
+  sudo tar xvzpf sites.tar.gz -C /etc/apache2
+
+
+$Id: README,v 1.2 2013/04/05 18:44:08 rcgood Exp $  #%^)

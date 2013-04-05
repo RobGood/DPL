@@ -1,0 +1,10 @@
+#!/bin/sh -e
+# $Id$  #%^)
+
+rm -rf sites-enabled sites.tar.gz
+
+mkdir sites-enabled
+(cd sites-enabled && ln -s ../sites-available/dpl)
+
+tar cf - sites-available sites-enabled | gzip > sites.tar.gz
+exit
