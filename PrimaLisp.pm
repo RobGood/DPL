@@ -1,6 +1,6 @@
 #!/usr/bin/perl -w
 # -*- coding: UTF-8 -*-
-# $Id: PrimaLisp.pm,v 1.446 2013/04/05 21:03:42 rcgood Exp $  #%^)
+# $Id: PrimaLisp.pm,v 1.447 2013/04/05 21:26:04 rcgood Exp $  #%^)
 #
 # This implements a PrimaLisp interpreter and some basic builtins.
 # Copyright (C) 2010-2013 Rob Good
@@ -21,7 +21,7 @@
 
 
 #X# doc_ClassDesc(<|
-# # $Id: PrimaLisp.pm,v 1.446 2013/04/05 21:03:42 rcgood Exp $
+# # $Id: PrimaLisp.pm,v 1.447 2013/04/05 21:26:04 rcgood Exp $
 # # |>, <|
 # # This class implements a Descriptor/PrimaLisp interpreter runtime environment.
 #X# |>)
@@ -37,7 +37,7 @@ $Version = '0.8.45';
 $VDate   = '2013-04-05';
 #X# |>)
 
-$Version = sprintf '%s.%s', $Version, (split /\./, (split /\s+/, '$Revision: 1.446 $')[1])[1];
+$Version = sprintf '%s.%s', $Version, (split /\./, (split /\s+/, '$Revision: 1.447 $')[1])[1];
 
 
 #X# doc_PerlUses(0,
@@ -641,43 +641,44 @@ my $Default_builtinsMap = {
          # Copy in descriptors.
          "umask 0333 ",
 
-         "cp $descDirSrc/BaseTests               $dir/$descDirDstII ",
-         "cp $descDirSrc/Benchmarks              $dir/$descDirDstII ",
          "cp $descDirSrc/ChangeLog               $dir/$descDirDstII ",
          "cp $descDirSrc/Credits                 $dir/$descDirDstII ",
-         "cp $descDirSrc/DPL-demo-template       $dir/$descDirDstII ",
-         "cp $descDirSrc/HTML-macros             $dir/$descDirDstII ",
-         "cp $descDirSrc/HTML.test               $dir/$descDirDstII ",
-         "cp $descDirSrc/README                  $dir/$descDirDstII ",
-         "cp $descDirSrc/README.info.null        $dir/$descDirDstII ",
-         "cp $descDirSrc/Tests                   $dir/$descDirDstII ",
-         "cp $descDirSrc/desc-function-index     $dir/$descDirDstII ",
-         "cp $descDirSrc/dbi-tests               $dir/$descDirDstII ",
-
-         "cp $descDirSrc/dpl.man.docs  $dir/$descDirDstII ",
-         "cp $descDirSrc/dpld.man.docs $dir/$descDirDstII ",
-         "cp $descDirSrc/dple.man.docs $dir/$descDirDstII ",
-         "cp $descDirSrc/dplx.man.docs $dir/$descDirDstII ",
-         "cp $descDirSrc/eval.man.docs $dir/$descDirDstII ",
-         "cp $descDirSrc/man.man.docs  $dir/$descDirDstII ",
-
-         "cp $descDirSrc/dpl-getting-started     $dir/$descDirDstII ",
-         "cp $descDirSrc/dple                    $dir/$descDirDstII ",
-         "cp $descDirSrc/dplx                    $dir/$descDirDstII ",
-         "cp $descDirSrc/dplx-docs               $dir/$descDirDstII ",
-         "cp $descDirSrc/echo                    $dir/$descDirDstII ",
-         "cp $descDirSrc/eval                    $dir/$descDirDstII ",
-         "cp $descDirSrc/eval-docs               $dir/$descDirDstII ",
-         "cp $descDirSrc/eval-docs-examples      $dir/$descDirDstII ",
-         "cp $descDirSrc/eval-history            $dir/$descDirDstII ",
-         "cp $descDirSrc/get-DPL-dist            $dir/$descDirDstII ",
-         "cp $descDirSrc/man                     $dir/$descDirDstII ",
-         "cp $descDirSrc/man.docs                $dir/$descDirDstII ",
-         "cp $descDirSrc/pretty-print            $dir/$descDirDstII ",
-         # "cp $descDirSrc/purl                    $dir/$descDirDstII ",
          "cp $descDirSrc/system-version          $dir/$descDirDstII ",
-         "cp $descDirSrc/user                    $dir/$descDirDstII ",
-         "cp $descDirSrc/wk-log                  $dir/$descDirDstII ",
+
+         "cp $descDirSrcII/BaseTests               $dir/$descDirDstII ",
+         "cp $descDirSrcII/Benchmarks              $dir/$descDirDstII ",
+         "cp $descDirSrcII/DPL-demo-template       $dir/$descDirDstII ",
+         "cp $descDirSrcII/HTML-macros             $dir/$descDirDstII ",
+         "cp $descDirSrcII/HTML.test               $dir/$descDirDstII ",
+         "cp $descDirSrcII/README                  $dir/$descDirDstII ",
+         "cp $descDirSrcII/README.info.null        $dir/$descDirDstII ",
+         "cp $descDirSrcII/Tests                   $dir/$descDirDstII ",
+         "cp $descDirSrcII/desc-function-index     $dir/$descDirDstII ",
+         "cp $descDirSrcII/dbi-tests               $dir/$descDirDstII ",
+
+         "cp $descDirSrcII/dpl.man.docs  $dir/$descDirDstII ",
+         "cp $descDirSrcII/dpld.man.docs $dir/$descDirDstII ",
+         "cp $descDirSrcII/dple.man.docs $dir/$descDirDstII ",
+         "cp $descDirSrcII/dplx.man.docs $dir/$descDirDstII ",
+         "cp $descDirSrcII/eval.man.docs $dir/$descDirDstII ",
+         "cp $descDirSrcII/man.man.docs  $dir/$descDirDstII ",
+
+         "cp $descDirSrcII/dpl-getting-started     $dir/$descDirDstII ",
+         "cp $descDirSrcII/dple                    $dir/$descDirDstII ",
+         "cp $descDirSrcII/dplx                    $dir/$descDirDstII ",
+         "cp $descDirSrcII/dplx-docs               $dir/$descDirDstII ",
+         "cp $descDirSrcII/echo                    $dir/$descDirDstII ",
+         "cp $descDirSrcII/eval                    $dir/$descDirDstII ",
+         "cp $descDirSrcII/eval-docs               $dir/$descDirDstII ",
+         "cp $descDirSrcII/eval-docs-examples      $dir/$descDirDstII ",
+         "cp $descDirSrcII/eval-history            $dir/$descDirDstII ",
+         "cp $descDirSrcII/get-DPL-dist            $dir/$descDirDstII ",
+         "cp $descDirSrcII/man                     $dir/$descDirDstII ",
+         "cp $descDirSrcII/man.docs                $dir/$descDirDstII ",
+         "cp $descDirSrcII/pretty-print            $dir/$descDirDstII ",
+         # "cp $descDirSrcII/purl                    $dir/$descDirDstII ",
+         "cp $descDirSrcII/user                    $dir/$descDirDstII ",
+         "cp $descDirSrcII/wk-log                  $dir/$descDirDstII ",
 
          "cp $descDirSrcII/hw          $dir/$descDirDstII ",
          "cp $descDirSrcII/upload      $dir/$descDirDstII ",
