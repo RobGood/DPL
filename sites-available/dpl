@@ -1,0 +1,47 @@
+<VirtualHost *:80>
+  ServerAdmin admin@server.com
+  ServerName www.server.com
+  ServerAlias www.server.com
+
+  PassEnv PATH PERL5LIB DPL_DESC_DIR
+
+  DocumentRoot /var/www
+  <Directory />
+    Options FollowSymLinks
+    AllowOverride None
+  </Directory>
+  <Directory /var/www/>
+    Options Indexes FollowSymLinks MultiViews
+    AllowOverride None
+    Order allow,deny
+    allow from all
+  </Directory>
+
+  ScriptAlias /api/ /usr/lib/cgi-bin/
+  <Directory "/usr/lib/cgi-bin">
+    AllowOverride None
+    Options +ExecCGI -MultiViews +FollowSymLinks
+    Order allow,deny
+    Allow from all
+  </Directory>
+
+  # From: http://doc.tiki.org/_htaccess
+  <IfModule mod_rewrite.c>
+    RewriteEngine On
+
+  # Apache does not pass Authorization header to CGI scripts
+  # Rewrite rules for passing authorisation in CGI or FGI mode
+  RewriteCond %{HTTP:Authorization} ^(.*)
+  RewriteRule ^(.*) - [E=HTTP_AUTHORIZATION:%1]
+  </IfModule>
+  # From: http://doc.tiki.org/_htaccess
+
+  ErrorLog /var/log/apache2/error.log
+
+  # Possible values include: debug, info, notice, warn, error, crit,
+  # alert, emerg.
+  LogLevel warn
+
+  CustomLog /var/log/apache2/access.log combined
+
+</VirtualHost>
