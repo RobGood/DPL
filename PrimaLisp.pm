@@ -1,6 +1,6 @@
 #!/usr/bin/perl -w
 # -*- coding: UTF-8 -*-
-# $Id: PrimaLisp.pm,v 1.442 2013/04/05 18:15:11 rcgood Exp $  #%^)
+# $Id: PrimaLisp.pm,v 1.446 2013/04/05 21:03:42 rcgood Exp $  #%^)
 #
 # This implements a PrimaLisp interpreter and some basic builtins.
 # Copyright (C) 2010-2013 Rob Good
@@ -21,7 +21,7 @@
 
 
 #X# doc_ClassDesc(<|
-# # $Id: PrimaLisp.pm,v 1.442 2013/04/05 18:15:11 rcgood Exp $
+# # $Id: PrimaLisp.pm,v 1.446 2013/04/05 21:03:42 rcgood Exp $
 # # |>, <|
 # # This class implements a Descriptor/PrimaLisp interpreter runtime environment.
 #X# |>)
@@ -33,11 +33,11 @@ BEGIN {
 
 #X# doc_PerlPackage(<|
 package PrimaLisp;
-$Version = '0.8.44';
-$VDate   = '2013-03-04';
+$Version = '0.8.45';
+$VDate   = '2013-04-05';
 #X# |>)
 
-$Version = sprintf '%s.%s', $Version, (split /\./, (split /\s+/, '$Revision: 1.442 $')[1])[1];
+$Version = sprintf '%s.%s', $Version, (split /\./, (split /\s+/, '$Revision: 1.446 $')[1])[1];
 
 
 #X# doc_PerlUses(0,
@@ -606,6 +606,9 @@ my $Default_builtinsMap = {
         my $descDirSrc = "$cgiDir/descriptor-dir";
         my $descDirDst = 'descriptor-dir';
 
+        my $descDirSrcII = "$descDirSrc/.ii/lib-dpl";
+        my $descDirDstII = "$descDirDst/.ii/lib-dpl";
+
 
         # Collect files into distribution directory.
         my @cmds = (
@@ -615,7 +618,7 @@ my $Default_builtinsMap = {
          "mkdir -p $dir/$descDirDst/RCS ",
          "mkdir -p $dir/$descDirDst/.import ",
          "mkdir -p $dir/$descDirDst/.var-gps/incl ",
-         "mkdir -p $dir/$descDirDst/.ii/lib.DPL ",
+         "mkdir -p $dir/$descDirDst/.ii/lib-dpl/.import ",
 
          "cp -p $INC{'PrimaLisp.pm'} $dir ",
 
@@ -625,12 +628,12 @@ my $Default_builtinsMap = {
          "cp -p $cgiDir/dple         $dir ",
          "cp -p $cgiDir/dplx         $dir ",
 
-         "cp -p $descDirSrc/.import/Core.dpli                            $dir/$descDirDst/.import ",
-         "cp -p $descDirSrc/.import/Core_sockets.dpli                    $dir/$descDirDst/.import ",
-         "cp -p $descDirSrc/.import/Authentication_DPL.dpli              $dir/$descDirDst/.import ",
-         "cp -p $descDirSrc/.import/Authentication_ActiveDirectory.dpli  $dir/$descDirDst/.import ",
+         "cp -p $descDirSrcII/.import/Core.dpli                            $dir/$descDirDstII/.import ",
+         "cp -p $descDirSrcII/.import/Core_sockets.dpli                    $dir/$descDirDstII/.import ",
+         "cp -p $descDirSrcII/.import/Authentication_DPL.dpli              $dir/$descDirDstII/.import ",
+         "cp -p $descDirSrcII/.import/Authentication_ActiveDirectory.dpli  $dir/$descDirDstII/.import ",
 
-         "if [ -f $descDirSrc/../COPYING ]; then cp -p $descDirSrc/../COPYING $dir; fi ",
+         "if [ -f $descDirSrc/.COPYING ]; then cp -p $descDirSrc/.COPYING $dir/COPYING; fi ",
 
          "cp $descDirSrc/.var-gps/incl/dpl.css  $dir/$descDirDst/.var-gps/incl ",
 
@@ -638,46 +641,46 @@ my $Default_builtinsMap = {
          # Copy in descriptors.
          "umask 0333 ",
 
-         "cp $descDirSrc/BaseTests               $dir/$descDirDst ",
-         "cp $descDirSrc/Benchmarks              $dir/$descDirDst ",
-         "cp $descDirSrc/ChangeLog               $dir/$descDirDst ",
-         "cp $descDirSrc/Credits                 $dir/$descDirDst ",
-         "cp $descDirSrc/DPL-demo-template       $dir/$descDirDst ",
-         "cp $descDirSrc/HTML-macros             $dir/$descDirDst ",
-         "cp $descDirSrc/HTML.test               $dir/$descDirDst ",
-         "cp $descDirSrc/README                  $dir/$descDirDst ",
-         "cp $descDirSrc/README.info.null        $dir/$descDirDst ",
-         "cp $descDirSrc/Tests                   $dir/$descDirDst ",
-         "cp $descDirSrc/desc-function-index     $dir/$descDirDst ",
-         "cp $descDirSrc/dbi-tests               $dir/$descDirDst ",
+         "cp $descDirSrc/BaseTests               $dir/$descDirDstII ",
+         "cp $descDirSrc/Benchmarks              $dir/$descDirDstII ",
+         "cp $descDirSrc/ChangeLog               $dir/$descDirDstII ",
+         "cp $descDirSrc/Credits                 $dir/$descDirDstII ",
+         "cp $descDirSrc/DPL-demo-template       $dir/$descDirDstII ",
+         "cp $descDirSrc/HTML-macros             $dir/$descDirDstII ",
+         "cp $descDirSrc/HTML.test               $dir/$descDirDstII ",
+         "cp $descDirSrc/README                  $dir/$descDirDstII ",
+         "cp $descDirSrc/README.info.null        $dir/$descDirDstII ",
+         "cp $descDirSrc/Tests                   $dir/$descDirDstII ",
+         "cp $descDirSrc/desc-function-index     $dir/$descDirDstII ",
+         "cp $descDirSrc/dbi-tests               $dir/$descDirDstII ",
 
-         "cp $descDirSrc/dpl.man.docs  $dir/$descDirDst ",
-         "cp $descDirSrc/dpld.man.docs $dir/$descDirDst ",
-         "cp $descDirSrc/dple.man.docs $dir/$descDirDst ",
-         "cp $descDirSrc/dplx.man.docs $dir/$descDirDst ",
-         "cp $descDirSrc/eval.man.docs $dir/$descDirDst ",
-         "cp $descDirSrc/man.man.docs  $dir/$descDirDst ",
+         "cp $descDirSrc/dpl.man.docs  $dir/$descDirDstII ",
+         "cp $descDirSrc/dpld.man.docs $dir/$descDirDstII ",
+         "cp $descDirSrc/dple.man.docs $dir/$descDirDstII ",
+         "cp $descDirSrc/dplx.man.docs $dir/$descDirDstII ",
+         "cp $descDirSrc/eval.man.docs $dir/$descDirDstII ",
+         "cp $descDirSrc/man.man.docs  $dir/$descDirDstII ",
 
-         "cp $descDirSrc/dpl-getting-started     $dir/$descDirDst ",
-         "cp $descDirSrc/dple                    $dir/$descDirDst ",
-         "cp $descDirSrc/dplx                    $dir/$descDirDst ",
-         "cp $descDirSrc/dplx-docs               $dir/$descDirDst ",
-         "cp $descDirSrc/echo                    $dir/$descDirDst ",
-         "cp $descDirSrc/eval                    $dir/$descDirDst ",
-         "cp $descDirSrc/eval-docs               $dir/$descDirDst ",
-         "cp $descDirSrc/eval-docs-examples      $dir/$descDirDst ",
-         "cp $descDirSrc/eval-history            $dir/$descDirDst ",
-         "cp $descDirSrc/get-DPL-dist            $dir/$descDirDst ",
-         "cp $descDirSrc/man                     $dir/$descDirDst ",
-         "cp $descDirSrc/man.docs                $dir/$descDirDst ",
-         "cp $descDirSrc/pretty-print            $dir/$descDirDst ",
-         # "cp $descDirSrc/purl                    $dir/$descDirDst ",
-         "cp $descDirSrc/system-version          $dir/$descDirDst ",
-         "cp $descDirSrc/user                    $dir/$descDirDst ",
-         "cp $descDirSrc/wk-log                  $dir/$descDirDst ",
+         "cp $descDirSrc/dpl-getting-started     $dir/$descDirDstII ",
+         "cp $descDirSrc/dple                    $dir/$descDirDstII ",
+         "cp $descDirSrc/dplx                    $dir/$descDirDstII ",
+         "cp $descDirSrc/dplx-docs               $dir/$descDirDstII ",
+         "cp $descDirSrc/echo                    $dir/$descDirDstII ",
+         "cp $descDirSrc/eval                    $dir/$descDirDstII ",
+         "cp $descDirSrc/eval-docs               $dir/$descDirDstII ",
+         "cp $descDirSrc/eval-docs-examples      $dir/$descDirDstII ",
+         "cp $descDirSrc/eval-history            $dir/$descDirDstII ",
+         "cp $descDirSrc/get-DPL-dist            $dir/$descDirDstII ",
+         "cp $descDirSrc/man                     $dir/$descDirDstII ",
+         "cp $descDirSrc/man.docs                $dir/$descDirDstII ",
+         "cp $descDirSrc/pretty-print            $dir/$descDirDstII ",
+         # "cp $descDirSrc/purl                    $dir/$descDirDstII ",
+         "cp $descDirSrc/system-version          $dir/$descDirDstII ",
+         "cp $descDirSrc/user                    $dir/$descDirDstII ",
+         "cp $descDirSrc/wk-log                  $dir/$descDirDstII ",
 
-         "cp $descDirSrc/.ii/lib.DPL/hw          $dir/$descDirDst/.ii/lib.DPL ",
-         "cp $descDirSrc/.ii/lib.DPL/upload      $dir/$descDirDst/.ii/lib.DPL ",
+         "cp $descDirSrcII/hw          $dir/$descDirDstII ",
+         "cp $descDirSrcII/upload      $dir/$descDirDstII ",
 
         );
 
@@ -1041,15 +1044,36 @@ my $Default_builtinsMap = {
         # Locate the Perl file to load.
         # This file should end with/return a hash containing the right stuff.
 
+        #  look in the main desc dir.
         my $loadFile = sprintf '%s/.import/%s.dpli',   $o->{descDir}, $importName;
         my $fh = new FileHandle("< $loadFile");
 
+        if(!defined $fh) {
+            # look in inner lib* desc dirs.
+            my @hits = glob sprintf('%s/.ii/lib[-.]*/.import/%s.dpli', $o->{descDir}, $importName);
+            $loadFile = shift @hits;
+            if(@hits) {
+                _report(['Extra found names being ignored: %s', join(',', @hits)]);
+            }
+            $fh = new FileHandle("< $loadFile");
+        }
+
         my $pl = $o;
         while(!defined $fh && defined $pl->{outerInterp}) {
-            $loadFile = sprintf '%s/.import/%s.dpli',   $pl->{outerInterp}->{descDir}, $importName;
-            $pl = $pl->{outerInterp};
+            # look in outer desc dir.
+            $loadFile = sprintf '%s/.import/%s.dpli', $pl->{outerInterp}->{descDir}, $importName;
 
             $fh = new FileHandle("< $loadFile");
+            if(!defined $fh) {
+                # look in outer's inner lib* desc dirs.
+                my @hits = glob sprintf('%s/.ii/lib[-.]*/.import/%s.dpli', $pl->{outerInterp}->{descDir}, $importName);
+                $loadFile = shift @hits;
+                if(@hits) {
+                    _report(['Extra found names being ignored: %s', join(',', @hits)]);
+                }
+                $fh = new FileHandle("< $loadFile");
+            }
+            $pl = $pl->{outerInterp};
         }
 
 		# _report([' !! Error: %s', $!]) unless defined $fh;
@@ -2941,6 +2965,9 @@ initInterpreter {
     $bi->{'='} = $bi->{'var-set'};
     $bi->{'*'} = $bi->{'×'};
     $bi->{'/'} = $bi->{'÷'};
+
+    # Try to ensure that files/dirs we make are group writable.
+    umask 002;
 
     return;
 }
