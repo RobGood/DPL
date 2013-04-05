@@ -1,0 +1,260 @@
+#!/usr/bin/perl -w
+# $Id: dpl-depends,v 1.21 2013/04/05 19:01:12 rcgood Exp $  #%^)
+#
+# This utility checks for known dependencies
+# and reports what, if anything, should be installed.
+# Copyright (C) 2011-2013 Rob Good
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+
+
+(my $Pname = $0) =~ s+^.*/++;
+my $Usage = "Usage: $Pname [minimal]";
+
+my @reqPkgs = (qw(
+Authen::Simple::ActiveDirectory
+Compress::Zlib
+DBI
+DB_File
+Digest::MD5
+Digest::SHA
+Encode
+FileHandle;
+File::Path
+HTTP::Date
+HTML::Entities
+JSON::XS
+JSON
+MIME::Base64
+Time::HiRes
+Term::ReadLine
+IPC::SysV
+IPC::Semaphore
+Crypt::CBC
+Crypt::OpenSSL::AES
+
+));
+
+my @reqPkgs_Full = (qw(
+XML::LibXML::XPathContext
+XML::LibXML
+HTTP::Server::Simple::CGI
+));
+
+# Still need to check for the presence of these commands:
+my @reqCmds = (qw(
+cpan
+rcs
+ci
+rlog
+diff
+wget
+curl
+md5sum
+tidy
+dig
+));
+
+my @reqCmds_Full = (qw(
+));
+
+
+
+my @reqFiles = (
+);
+
+my @reqFiles_Full = (
+'/usr/share/dict/words'
+);
+
+
+my $checkForMinimalInstall = 0;
+
+if(@ARGV) {
+    if($ARGV[0] eq 'minimal') {
+        $checkForMinimalInstall = 1;
+    }
+    else {
+        print STDERR "$Usage\n";
+        exit 1;
+    }
+}
+
+
+if(!$checkForMinimalInstall) {
+    push @reqPkgs,  @reqPkgs_Full;
+    push @reqCmds,  @reqCmds_Full;
+    push @reqFiles, @reqFiles_Full;
+}
+
+
+
+
+
+
+my $haveCPAN = 0;
+
+my @missingPkgs  = ( );
+my @missingCmds  = ( );
+my @missingFiles = ( );
+
+my @havePkgs     = ( );
+my @haveCmds     = ( );
+my @haveFiles    = ( );
+
+
+
+# Look for packages
+map {
+
+print STDERR " -- $Pname: use $_\n";
+ eval "no warnings 'redefine'; use $_";
+print STDERR " -- $Pname: use $_ done\n";
+ if($@) {
+	if($@ =~ /Can't locate/) { push @missingPkgs, $_ }
+	else { print STDERR " !! $Pname: Exception on package $_ : $@\n" }
+ }
+ else { push @havePkgs, $_ }
+} @reqPkgs;
+
+
+# Look for commands
+map {
+	my $cmd = $_;
+	my $path = `which $cmd 2>&1`; chomp $path;
+
+	if($path =~ /^\//) { push @haveCmds,    $cmd ; if($cmd eq 'cpan') { $haveCPAN = 1 } }
+	else               { push @missingCmds, $cmd }
+} @reqCmds;
+
+
+# Look for files
+map {
+	my $path = $_; chomp $path;
+
+	if(-f $path) { push @haveFiles,    $path }
+	else         { push @missingFiles, $path }
+} @reqFiles;
+
+
+
+
+my $cmdInstCmd = `which apt-get 2>&1`;
+if($cmdInstCmd !~ /^\//) {
+	$cmdInstCmd = `which yum 2>&1`;
+	if($cmdInstCmd !~ /^\//) {
+		printf STDERR " !! $Pname: Can't find a command installer command (%s) anywhere.\n\n", 'apt-get, yum';
+		$cmdInstCmd = '????';
+	}
+}
+
+chomp $cmdInstCmd;
+if($cmdInstCmd =~ /^\//) { $haveCPAN = 1 }
+
+$cmdInstCmd =~ s+^.*/++;
+
+
+
+
+
+my $rc = 0;
+
+
+print " ** DPL Dependencies...\n\n";
+
+if(!@havePkgs && !@haveCmds && !@haveFiles) {
+	print " !! We have no dependencies.\n";
+	$rc |= 0x01;
+}
+else {
+	if(@haveCmds) {
+		print " -- We have these Commands:\n";
+		map { print "      $_\n" } @haveCmds;
+		print "\n";
+	}
+
+	if(@havePkgs) {
+		print " -- We have these Packags:\n";
+		map { print "      $_\n" } @havePkgs;
+		print "\n";
+	}
+
+	if(@haveFiles) {
+		print " -- We have these Files:\n";
+		map { print "      $_\n" } @haveFiles;
+		print "\n";
+	}
+}
+
+
+
+sub
+pkgInstCmd {
+	my ($pkg) = @_;
+
+	if($haveCPAN) { "cpan $pkg" }
+    else          { sprintf "perl -MCPAN -e 'install %s'", $pkg }
+}
+
+
+
+if(!@missingPkgs && !@missingCmds && !@missingFiles) {
+	print " ** We have no missing dependancies.\n";
+	exit 0;
+}
+else {
+	print "-----------------------------------------\n\n";
+
+	if(@missingCmds) {
+		print " !! We have missing Commands:\n";
+		map { print "      $_\n" } @missingCmds;
+
+		print "\n";
+
+		print " -- To install missing Commands, run these commands as root:\n";
+		map { print "     $cmdInstCmd install $_\n" } @missingCmds;
+		print "\n";
+
+		$rc |= 0x02;
+	}
+
+	if(@missingPkgs) {
+		print " !! We have missing Packages:\n";
+		map { print "      $_\n" } @missingPkgs;
+
+		print "\n";
+
+		print " -- To install missing Package, run these commands as root:\n";
+		map { printf "     %s\n", pkgInstCmd($_) } @missingPkgs;
+		print "\n";
+
+		$rc |= 0x04;
+	}
+
+	if(@missingFiles) {
+		print " !! We have missing Files:\n";
+		map { print "      $_\n" } @missingFiles;
+
+		print "\n";
+
+		print " -- To install missing Files, run these commands as root:\n";
+		map { print "     ???? $_\n" } @missingFiles;
+		print "\n";
+
+		$rc |= 0x08;
+	}
+}
+
+exit $rc;
