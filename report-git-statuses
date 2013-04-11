@@ -14,6 +14,12 @@ $descDir
 .
 "
 
+gitPushCmd=''
+if [ "$1" = '-push' ]; then
+    gitPushCmd='(cd $dir && git push)'
+fi
+
+
 for dir in $dirList; do
     if [ ! -d $dir/.git ]; then
         # echo " -- $Pname: no git repo here: $dir"
@@ -21,6 +27,7 @@ for dir in $dirList; do
     else
         echo " -- $Pname: dir: $dir"
         ( cd $dir && git status )
+        eval $gitPushCmd
         echo ''
     fi
 done
