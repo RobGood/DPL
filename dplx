@@ -1,6 +1,6 @@
 #!/usr/bin/perl -w
 # -*- coding: UTF-8 -*-
-# $Id: dplx,v 1.80 2013/04/05 18:15:11 rcgood Exp $  #%^)
+# $Id: dplx,v 1.81 2013/04/10 17:42:16 rcgood Exp $  #%^)
 #
 # This is the DPL webservice endpoint dispatcher
 # Copyright (C) 2010-2013 Rob Good
@@ -70,8 +70,12 @@ if(exists $ENV{REQUEST_URI}) {
   unshift @tmp, '';
   $path_info2 = join '/', @tmp;
 
+  if(!exists $ENV{PATH_INFO}) {
+    $ENV{PATH_INFO} = '';
+  }
+
   if($ENV{PATH_INFO} ne $path_info2) {
-	 print STDERR " !! Repairing PATH_INFO !\n";
+	print STDERR " !! Repairing PATH_INFO !\n";
 	print STDERR " !! was  PATH_INFO: $ENV{PATH_INFO}\n";
 	print STDERR " !! shbe path_info2: $path_info2\n";
 

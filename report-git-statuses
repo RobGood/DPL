@@ -1,0 +1,28 @@
+#!/bin/sh -e
+# $Id: report-git-statuses,v 1.2 2013/04/11 19:57:47 rcgood Exp rcgood $  #%^)
+
+Pname="`exec basename $0`"
+Usage="Usage: $Pname"
+
+descDir=descriptor-dir-live
+
+dirList="
+$descDir/.ii-user/*/.ii/*
+$descDir/.ii-user/*
+$descDir/.ii/*
+$descDir
+.
+"
+
+for dir in $dirList; do
+    if [ ! -d $dir/.git ]; then
+        # echo " -- $Pname: no git repo here: $dir"
+        :
+    else
+        echo " -- $Pname: dir: $dir"
+        ( cd $dir && git status )
+        echo ''
+    fi
+done
+
+exit

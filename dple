@@ -1,6 +1,6 @@
 #!/usr/bin/perl -w
 # -*- coding: UTF-8 -*-
-# $Id: dple,v 1.142 2013/04/05 18:15:11 rcgood Exp $  #%^)
+# $Id: dple,v 1.146 2013/04/11 17:45:47 rcgood Exp $  #%^)
 #
 # This is the original descriptor (JSON object) editor.
 # Copyright (C) 2010-2013 Rob Good
@@ -201,7 +201,9 @@ my $ctlHTML = '';
 # If set to true during access check, don't leak any revealing info in error response.
 my $AccessDeniedException = 0;
 
-my $css_line = "<style\n>" . $pl->eval('$<incl/dpl.css>', {}) . '</style>';
+# my $css_line = "<style>\n" . $pl->eval('$<incl/dpl.css>', {}) . '</style>';
+  my $css_line = $pl->eval('$<incl/dpl.css>', {});
+if(defined $css_line) { $css_line = "<style>\n $css_line </style>" }
 
 my $titleHTML;
 
@@ -822,7 +824,7 @@ FINI
     $msg3 = ''; # "<br/>to copy an existing Descriptor, click its name below, then add <tt>-NewSuffix</tt> to the end of the URL in the address bar.";
 
     my $doomedDesc = $queryHash->{_deleteDesc};
-    if(defined $doomedDesc) {
+    if(defined $DPL_userid && defined $doomedDesc) {
         $pl->eval('(desc-write () $dname)', {dname=>$doomedDesc});
     }
 
@@ -847,6 +849,8 @@ FINI
 
                             my $descFile = getDescFilePath $descName;
 
+
+                            $! = 0;
                             my @s = stat $descFile;
                             if($!) { errExit "Can't stat($descFile): $!"  }
 
@@ -855,12 +859,16 @@ FINI
 
                             my $editLink = sprintf "<a href='/api/%s/%s'>%s</a>", $Pname,      $descName, (defined $DPL_userid? 'edit': 'view');
                             my $runLink  = sprintf "<a href='/api/%s/%s'>%s</a>", $Pname_dplx, $descName, 'run';
-                                            #                     1              2          3   4
-                            my $zapLink  = sprintf "<a href='/api/%s?_deleteDesc=%s' title='%s'>%s</a>",
-                                                $Pname, urlencode($descName), "permanently delete descriptor &apos;$descName&apos;", '.';
-                                            #   1       2                     3                                                       4
 
-                            $zapLink = "<font color='#ff0000'>x${zapLink}x</font>";
+                            my $zapLink = '';
+                            if(defined $DPL_userid) {
+                                                #                     1              2          3   4
+                                $zapLink  = sprintf "<a href='/api/%s?_deleteDesc=%s' title='%s'>%s</a>",
+                                                    $Pname, urlencode($descName), "permanently delete descriptor &apos;$descName&apos;", '.';
+                                                #   1       2                     3                                                       4
+
+                                $zapLink = "<font color='#ff0000'>x${zapLink}x</font>";
+                            }
 
 #-----------------------------
                             #        1   2       3   4   5      6      7
@@ -980,6 +988,9 @@ FINI
         my $mFrag2UE = '';
         $mFrag2UE = "/$mapNameUE"  if defined $mapNameUE && $mapNameUE ne '';
 
+        my $deleteControlFrag = !defined $DPL_userid? '&nbsp;' : 
+          " delete <a title='permanently delete &apos;$mFrag&apos; map' href='/api/$Pname/$descNameUE$mFrag2?_delete=$nameUE'><b>.</b></a>";
+
         my $mFrag2 = '';
         $mFrag2 = "/$mapName"  if defined $mapName && $mapName ne '';
 <<FINI;
@@ -991,7 +1002,7 @@ FINI
 <td>$mapDesc</td>
 <td width='10%' colspan='1' align='right'>
 <font color='#ff0000'>
- delete <a title='permanently delete &apos;$mFrag&apos; map' href='/api/$Pname/$descNameUE$mFrag2?_delete=$nameUE'><b>.</b></a>
+$deleteControlFrag
 </font>
 </td>
 </tr>
@@ -1022,6 +1033,9 @@ FINI
         my $mFrag2UE = '';
         $mFrag2UE = "/$mapNameUE"  if defined $mapNameUE && $mapNameUE ne '';
 
+        my $deleteControlFrag = !defined $DPL_userid? '&nbsp;' : 
+" delete <a title='permanently delete &apos;$mFrag&apos; map' href='/api/$Pname/$descNameUE$mFrag2?_delete=$nameUE'><b>.</b></a>";
+
         my $mFrag2 = '';
         $mFrag2 = "/$mapName"  if defined $mapName && $mapName ne '';
 
@@ -1034,7 +1048,7 @@ FINI
 <td>&nbsp;</td>
 <td width='10%' colspan='1' align='right'>
 <font color='#ff0000'>
- delete <a title='permanently delete &apos;$mFrag&apos; map' href='/api/$Pname/$descNameUE$mFrag2?_delete=$nameUE'><b>.</b></a>
+$deleteControlFrag
 </font>
 </td>
 </tr>
@@ -1141,6 +1155,9 @@ FINI
             }
           }
 
+        my $deleteControlFrag = !defined $DPL_userid? '&nbsp;' : 
+" delete <a title='permanently delete &apos;$name&apos; field' href='/api/$Pname/$descNameUE$mFrag2?_delete=$nameUE'><b>.</b></a>";
+
             $text = xmlencode $text;
             $renderHTML = <<FINI;
 <tr> <td width='25%' valign='top' align='right'><a name='_$name'></a> <b>$name</b>: <br/> $names_text_html </td>
@@ -1148,7 +1165,7 @@ FINI
 <td valign='top'><textarea type='text' rows='$rows' cols='$cols' name='$name'>$text</textarea></td>
 <td align='right' valign='top' width='10%'>
 <font color='#ff0000'>
-delete <a title='permanently delete &apos;$name&apos; field' href='/api/$Pname/$descNameUE$mFrag2?_delete=$nameUE'><b>.</b></a>
+$deleteControlFrag
 </font>
 </td>
 </tr>

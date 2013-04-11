@@ -1,6 +1,6 @@
 #!/usr/bin/perl -w
 # -*- coding: UTF-8 -*-
-# $Id: PrimaLisp.pm,v 1.447 2013/04/05 21:26:04 rcgood Exp $  #%^)
+# $Id: PrimaLisp.pm,v 1.455 2013/04/11 17:45:00 rcgood Exp $  #%^)
 #
 # This implements a PrimaLisp interpreter and some basic builtins.
 # Copyright (C) 2010-2013 Rob Good
@@ -21,7 +21,7 @@
 
 
 #X# doc_ClassDesc(<|
-# # $Id: PrimaLisp.pm,v 1.447 2013/04/05 21:26:04 rcgood Exp $
+# # $Id: PrimaLisp.pm,v 1.455 2013/04/11 17:45:00 rcgood Exp $
 # # |>, <|
 # # This class implements a Descriptor/PrimaLisp interpreter runtime environment.
 #X# |>)
@@ -37,7 +37,7 @@ $Version = '0.8.45';
 $VDate   = '2013-04-05';
 #X# |>)
 
-$Version = sprintf '%s.%s', $Version, (split /\./, (split /\s+/, '$Revision: 1.447 $')[1])[1];
+$Version = sprintf '%s.%s', $Version, (split /\./, (split /\s+/, '$Revision: 1.455 $')[1])[1];
 
 
 #X# doc_PerlUses(0,
@@ -615,10 +615,10 @@ my $Default_builtinsMap = {
 
          "umask 002",
 
-         "mkdir -p $dir/$descDirDst/RCS ",
+         # "mkdir -p $dir/$descDirDst/RCS ",
          "mkdir -p $dir/$descDirDst/.import ",
-         "mkdir -p $dir/$descDirDst/.var-gps/incl ",
-         "mkdir -p $dir/$descDirDst/.ii/lib-dpl/.import ",
+         "mkdir -p $dir/$descDirDstII/.var-gps/incl ",
+         "mkdir -p $dir/$descDirDstII/.import ",
 
          "cp -p $INC{'PrimaLisp.pm'} $dir ",
 
@@ -635,14 +635,14 @@ my $Default_builtinsMap = {
 
          "if [ -f $descDirSrc/.COPYING ]; then cp -p $descDirSrc/.COPYING $dir/COPYING; fi ",
 
-         "cp $descDirSrc/.var-gps/incl/dpl.css  $dir/$descDirDst/.var-gps/incl ",
+         "cp $descDirSrcII/.var-gps/incl/dpl.css  $dir/$descDirDstII/.var-gps/incl ",
 
 
          # Copy in descriptors.
          "umask 0333 ",
 
-         "cp $descDirSrc/ChangeLog               $dir/$descDirDstII ",
-         "cp $descDirSrc/Credits                 $dir/$descDirDstII ",
+         "cp $descDirSrcII/ChangeLog               $dir/$descDirDstII ",
+         "cp $descDirSrcII/Credits                 $dir/$descDirDstII ",
          "cp $descDirSrc/system-version          $dir/$descDirDstII ",
 
          "cp $descDirSrcII/BaseTests               $dir/$descDirDstII ",
@@ -676,7 +676,6 @@ my $Default_builtinsMap = {
          "cp $descDirSrcII/man                     $dir/$descDirDstII ",
          "cp $descDirSrcII/man.docs                $dir/$descDirDstII ",
          "cp $descDirSrcII/pretty-print            $dir/$descDirDstII ",
-         # "cp $descDirSrcII/purl                    $dir/$descDirDstII ",
          "cp $descDirSrcII/user                    $dir/$descDirDstII ",
          "cp $descDirSrcII/wk-log                  $dir/$descDirDstII ",
 
@@ -878,10 +877,10 @@ my $Default_builtinsMap = {
 
 		my $ofh = $o->{ofh};
 
-		my $cprtNotice = 'Primal Inc., all rights reserved. www.primal.com';
+		my $cprtNotice = $PrimaLisp::cprtNotice;
 
 		printf $ofh " ** Descriptor/PrimaLisp%s (v%s %s)\n", $name, $Version, $VDate;
-		printf $ofh " ** ©%s %s\n", $year, $cprtNotice;
+		printf $ofh " ** ©%s %s\n", $year, $cprtNotice if defined $cprtNotice;
 
 		return;
     },
@@ -1724,6 +1723,45 @@ referToLookup {
 
 #--------------------------------
 
+#X# doc_Method(getFullPathFromPath, <|
+# # $o->getFullPathFromPath($path);
+# # |>, <| This implement searching through various desc-dirs...
+# #   Return full path relative to top interpreter.
+#X# |>)
+sub
+getFullPathFromPath {
+	my ($o, $path) = @_;
+	# print STDERR " >> $Pname: getFullPathFromPath($path)\n";
+
+   
+    # Look in current descriptor dir
+    my $fullPath = "$o->{descDir}/$path";
+
+    my @s = stat $fullPath;
+    if(@s) { return $fullPath }
+
+    
+    # Look in current inner descriptor dir
+    my @fullPathList = glob "$o->{descDir}/.ii/lib[-.]*/$path";
+    if(@fullPathList) {
+        $fullPath = shift @fullPathList;
+        if(@fullPathList) { _report(['Leaving some paths behind: %s', join(':', @fullPathList)]) }
+
+        @s = stat $fullPath;
+        if(@s) { return $fullPath }
+    }
+
+    # Look in outer interpter...
+    if(exists $o->{outerInterp}) { return $o->{outerInterp}->getFullPathFromPath($path) }
+
+	return;
+}
+
+
+
+
+#--------------------------------
+
 
 sub _interpolate_ {
     my ($o, $vars, $pre, $var, $post) = @_;
@@ -1841,8 +1879,7 @@ eval {
 			}
 
 
-            # if($after !~ /^\s*\)\s*/) 
-            if($after =~ /^\s*([\)}\]])\s*/) {
+            if($after =~ /^\s*([\)}\]])\s*/) { 
 				my $match = $1;
 				my $clDelim = $closeDelim{$openDelim};
   				if($match ne $clDelim) {
@@ -1862,13 +1899,6 @@ eval {
                 $o->{evaling} = 0 if $ismacro;
 
 				if($o->{evaling} && $after =~ s/^\s*@//) { $isListInterpolate = 1 }
-
-				# my $fnDelim = $fnDelim{$openDelim};
-
-				# if(defined $fnDelim && !defined $fn) {
-					# $fn = $fnDelim if defined $fnDelim;
-					# push @$args, $fn;
-				# }
 
 				($value, $after) = $o->eval($after, $vars);
 
@@ -1940,7 +1970,11 @@ eval {
                         $o->{evaling} = 0;
                     }
 
-                    $o->{lambda} = 1  if $fn eq 'fn' || $fn eq 'lambda' || $fn eq 'λ';
+                    if($fn eq 'fn' || $fn eq 'lambda' || $fn eq 'λ') {
+                        $o->{lambda} = 1;
+                        my $n = ++$o->{lambdaSeq};
+                        # _report(['saw fn %d, expr %s', $n, $expr]);
+                    }
                 }
 
 
@@ -2261,7 +2295,7 @@ else {
 
                 if(exists $fn->{'.class'} && (my $ns = $fn->{'.class'}) ne '') {
                     $code = sprintf '((fn (obj %s -- val) (namespace %s {self $self obj $obj val $val %s} %s)) $_obj %s)',
-							                #   1                     2                                    3   4          5
+							                #   1                    2                                3   4          5
 											#   1                       2    3                       4      5
                                                 join(' ', @$dpl_args0), $ns, join(' ', @$dpl_args2), $code, join(' ', @$dpl_args12);
                 }
@@ -2412,31 +2446,90 @@ else {
 
                 $params = $1;
 
-                my @params = split /\s+/, $params;
+
+                my @params0 = split /\s+/, $params;
+ 
+                my @params = ();
+                my @closed = ();
+ 
+                my $isInClosed;
+                foreach my $paramName (@params0) {
+                    if(!defined $isInClosed) {
+                        if($paramName ne '--') { push @params, $paramName }
+                        else { $isInClosed = 1 }
+                    }
+                    else { push @closed, $paramName }
+                }
+
 
                 map {
+                    my $value;
                     if(defined $args) {
-                        if(s/^&//) { unshift @{$varMap->{$_}}, $args; undef $args }
-                        else       { unshift @{$varMap->{$_}}, shift(@$args) }
+                        if(!s/^&//) { $value = shift(@$args)      }    # common case, no &var in param list
+                        else        { $value = $args; undef $args }    # first time seeing &var
                     }
-					else {
-						unshift @{$varMap->{$_}}, undef;
-					}
+
+                    unshift @{$varMap->{$_}}, $value;
                 } @params;
+
+
+                # My plan is to introduce closures by calling variables after a '--' in the params list 'closed' variables.
+                # (I guess the formal params are open)
+                # (i.e. (fn (-formal- -- -closed-) ...)
+                # There should be no compatibility issues with introducing this change.
+                # That naming conventions currently indicates the end of formal params and beginning of 'private' variables
+
+                # The value a so-named variable has when a function is defined
+                # (i.e. when a lambda expression (fn (-formal- -- -closed-) ...) is evaluated)
+                # will be in effect when that function is called.
+                # After the function returns, the so-named values will be saved and
+                # passed back to the function the next time it is called.
+
+                # It might turn out to to expensive to store closed values for all defined functions using '--',
+                #   Might use '---' instead?
+
+                # Mising piece right now is mapping from fn defn to fn application. 
+                #   Hmm, what fn are we calling now, lookup its closed vars and pass in/save out.
+
+
+
+                # TODO close over vars named after '--'
+                #  Need to ba able to identify which function is being applied, its id based on the function's definition sequence number. {lambdaSeq}
+                if(@closed) {
+                    #_report(['saw fn %d, expr %s', $o->{lambdaSeq}, $expr]);
+                    map {
+                        # TODO Copy in value from a per-fn namespace
+                        #_report(['saw fn %d, var %s', $o->{lambdaSeq}, $_]);
+                        unshift @{$varMap->{$_}}, undef;
+                    } @closed;
+                }
 
                 $afterL =~ s/\)$//;
 
 
 				unshift @{$varMap->{'.'}}, "  $fn $ns";
 
-				# Proper macros tinker here...
+#-------------------
+                if(-f '/tmp/dpl-callstack-dump.doit') {
+                    my $now = int time;
+                    my $fh = new FileHandle("> /tmp/dpl-callstack-dump-$now-$$");
+                    printf $fh "%s\n", join("\n", @{$varMap->{'.'}});
+                    close $fh;
+                    unlink '/tmp/dpl-callstack-dump.doit';
+                }
+#-------------------
 
                 # Eval function body, capture perl die caused by early out (return)
                 $value = eval { $o->evalAll($afterL, { }) };
 
-				# Proper macros tinker here...
-
 				shift @{$varMap->{'.'}};
+
+
+                # TODO save 'close' values over vars named after '--'
+                map {
+                    # TODO Copy out value to a per-fn namespace
+                    shift @{$varMap->{$_}};
+                } @closed;
 
                 map { shift @{$varMap->{$_}} } @params;
 
@@ -2917,6 +3010,8 @@ initInterpreter {
         $initCode = eval { <DATA> };
         die " !! Exception1: $@\n" if $@;
     }
+
+    $o->{lambdaSeq} = 0;
 
     return if exists $o->{noInit};
 

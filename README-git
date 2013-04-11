@@ -1,0 +1,79 @@
+# $Id$  #%^)
+
+DPL and Git
+-----------
+Basically, a descriptor directory maps to a git repository.
+
+Now, with userids and workspaces, it's trickier.
+
+Currently the notion of workspace is somewhat external to DPL.
+Lookups and such are handled within DPL but specifying a workspace
+to operation in is done externally within scripts dple and dplx.
+So it only works (easily) from web clients, not within code :(
+
+I'd like to have a builtin:
+  (workspace -name- -exprs-...)
+  (workspace -name-!)
+
+    that does the same thing so that those scripts can just call
+    (workspace)
+
+
+
+Use cases
+---------
+These are currently done by commandline, outside of DPL.  I'd like to
+be able to do these via builtins, but will have to deal with ssh keys,
+etc. when doing a push, so for now it's just commandline.
+
+    Create a new DPL workspace and make it a local git repo
+      in a browser, go to:
+        http://.../api/dple?_workspaceName=NEW_NAME_HERE
+
+      then go to:
+        http://.../api/eval?expr=(git init)
+
+    Create a new remote git repo
+      go to http://hub.primal.com/dpl
+        add a the new repository
+
+      in a shell run:
+        cd descriptor-dir/...
+        git remote add origin -git-ssh-url-from-above-
+        git push origin master
+
+    Create a new DPL workspace and initialize it from a remote repo
+      in a browser, go to:
+        http://.../api/dple?_workspaceName=NEW_NAME_HERE
+
+      then go to:
+        http://.../api/eval?expr=(git clone -git-http-url-)
+
+    Add new descriptors to next commit
+      cd descriptor-dir/...
+      git add ...
+
+    Remove descriptors from next commit
+
+    Make next commit to local repo
+      cd descriptor-dir/...
+      git commit -m message
+
+    Update local repo from remote repo
+      cd descriptor-dir/...
+      git push
+
+    Update remote repo with local changes
+      cd descriptor-dir/...
+      git pull
+
+
+
+Operations
+----------
+(git init) # initialize current desc-dir as local git repo
+(git add desc ...)  # add descriptors to next commit
+(git commit -msg- ...) # commit changes to local repo
+(git push ...) # push desc-dir to remote git repo
+(git pull ...) # pull desc-dir from remote git repo
+
