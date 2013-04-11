@@ -1,5 +1,5 @@
 #!/bin/sh -e
-# $Id: report-git-statuses,v 1.2 2013/04/11 19:57:47 rcgood Exp rcgood $  #%^)
+# $Id: report-git-statuses,v 1.3 2013/04/11 22:33:42 rcgood Exp $  #%^)
 
 Pname="`exec basename $0`"
 Usage="Usage: $Pname"
@@ -27,7 +27,7 @@ for dir in $dirList; do
     else
         echo " -- $Pname: dir: $dir"
         ( cd $dir && git status )
-        eval $gitPushCmd
+        eval $gitPushCmd || true
         echo ''
     fi
 done
