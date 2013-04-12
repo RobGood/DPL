@@ -1,6 +1,6 @@
 #!/usr/bin/perl -w
 # -*- coding: UTF-8 -*-
-# $Id: PrimaLisp.pm,v 1.455 2013/04/11 17:45:00 rcgood Exp $  #%^)
+# $Id: PrimaLisp.pm,v 1.456 2013/04/12 07:07:28 rcgood Exp $  #%^)
 #
 # This implements a PrimaLisp interpreter and some basic builtins.
 # Copyright (C) 2010-2013 Rob Good
@@ -21,7 +21,7 @@
 
 
 #X# doc_ClassDesc(<|
-# # $Id: PrimaLisp.pm,v 1.455 2013/04/11 17:45:00 rcgood Exp $
+# # $Id: PrimaLisp.pm,v 1.456 2013/04/12 07:07:28 rcgood Exp $
 # # |>, <|
 # # This class implements a Descriptor/PrimaLisp interpreter runtime environment.
 #X# |>)
@@ -37,7 +37,7 @@ $Version = '0.8.45';
 $VDate   = '2013-04-05';
 #X# |>)
 
-$Version = sprintf '%s.%s', $Version, (split /\./, (split /\s+/, '$Revision: 1.455 $')[1])[1];
+$Version = sprintf '%s.%s', $Version, (split /\./, (split /\s+/, '$Revision: 1.456 $')[1])[1];
 
 
 #X# doc_PerlUses(0,
@@ -2990,7 +2990,9 @@ initInterpreter {
 
 	$logFH->autoflush(1);
 
-    my $baseInitFile = "$o->{descDir}/.dpl-init.pl";
+    # my $baseInitFile = "$o->{descDir}/.dpl-init.pl";
+      my $baseInitFile = $o->getFullPathFromPath('.dpl-init.pl');
+
     if(-f $baseInitFile) {
         my $fh = new FileHandle("< $baseInitFile");
         if(!defined $fh) {
