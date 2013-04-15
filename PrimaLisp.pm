@@ -1,6 +1,6 @@
 #!/usr/bin/perl -w
 # -*- coding: UTF-8 -*-
-# $Id: PrimaLisp.pm,v 1.456 2013/04/12 07:07:28 rcgood Exp $  #%^)
+# $Id: PrimaLisp.pm,v 1.458 2013/04/12 16:38:31 rcgood Exp $  #%^)
 #
 # This implements a PrimaLisp interpreter and some basic builtins.
 # Copyright (C) 2010-2013 Rob Good
@@ -21,7 +21,7 @@
 
 
 #X# doc_ClassDesc(<|
-# # $Id: PrimaLisp.pm,v 1.456 2013/04/12 07:07:28 rcgood Exp $
+# # $Id: PrimaLisp.pm,v 1.458 2013/04/12 16:38:31 rcgood Exp $
 # # |>, <|
 # # This class implements a Descriptor/PrimaLisp interpreter runtime environment.
 #X# |>)
@@ -37,7 +37,7 @@ $Version = '0.8.45';
 $VDate   = '2013-04-05';
 #X# |>)
 
-$Version = sprintf '%s.%s', $Version, (split /\./, (split /\s+/, '$Revision: 1.456 $')[1])[1];
+$Version = sprintf '%s.%s', $Version, (split /\./, (split /\s+/, '$Revision: 1.458 $')[1])[1];
 
 
 #X# doc_PerlUses(0,
@@ -1742,7 +1742,7 @@ getFullPathFromPath {
 
     
     # Look in current inner descriptor dir
-    my @fullPathList = glob "$o->{descDir}/.ii/lib[-.]*/$path";
+    my @fullPathList = glob "$o->{descDir}/.ii/lib-*/$path";
     if(@fullPathList) {
         $fullPath = shift @fullPathList;
         if(@fullPathList) { _report(['Leaving some paths behind: %s', join(':', @fullPathList)]) }
@@ -2990,10 +2990,8 @@ initInterpreter {
 
 	$logFH->autoflush(1);
 
-    # my $baseInitFile = "$o->{descDir}/.dpl-init.pl";
-      my $baseInitFile = $o->getFullPathFromPath('.dpl-init.pl');
-
-    if(-f $baseInitFile) {
+    my $baseInitFile = $o->getFullPathFromPath('.dpl-init.pl');
+    if(defined $baseInitFile && -f $baseInitFile) {
         my $fh = new FileHandle("< $baseInitFile");
         if(!defined $fh) {
             _report([' !! Can\'t open init file: %s', $!])
