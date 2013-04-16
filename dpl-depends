@@ -1,5 +1,5 @@
 #!/usr/bin/perl -w
-# $Id: dpl-depends,v 1.21 2013/04/05 19:01:12 rcgood Exp $  #%^)
+# $Id: dpl-depends,v 1.22 2013/04/16 02:06:01 rcgood Exp $  #%^)
 #
 # This utility checks for known dependencies
 # and reports what, if anything, should be installed.
@@ -65,6 +65,7 @@ curl
 md5sum
 tidy
 dig
+git
 ));
 
 my @reqCmds_Full = (qw(

@@ -1,9 +1,30 @@
-DPL v0.8.44.441/2013-03-04
---------------------------
+DPL (Descriptor / PrimaLisp) v0.8.45.459 / 2013-04-05 
 
-A decentralized social computing environment;
-  it's like a wiki, but for writing programs rather than writing documents,
-  it's like a spreadsheet, but hierarcical rather than tabular.
+This is the initial release of DPL.
 
 
-# $Id: README,v 1.5 2013/04/05 19:11:24 rcgood Exp $  #%^)
+Known Bugs
+
+Function calls ending with a comment break the parser.
+  i.e. don't do
+        (foo bar baz /* xxx */ )
+       or
+        (foo
+           bar
+           baz
+           // xxx
+        )
+
+Anon user has /foo and ~/foo dups in workspace list
+Inner interpreter's (report) output goes to STDERR not log file
+
+
+Future Directions
+
+re-implement dple as DPL app
+standalone HTTP(S) server
+integrate code mirror for better a dple editing UI.
+
+--
+# ©2012 Rob Good
+# $Id: README,v 1.6 2013/04/15 19:51:42 rcgood Exp $  #%^)
