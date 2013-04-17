@@ -1,6 +1,6 @@
 #!/usr/bin/perl -w
 # -*- coding: UTF-8 -*-
-# $Id: dplx,v 1.83 2013/04/17 17:31:02 rcgood Exp $  #%^)
+# $Id: dplx,v 1.84 2013/04/17 18:40:06 rcgood Exp $  #%^)
 #
 # This is the DPL webservice endpoint dispatcher
 # Copyright (C) 2010-2013 Rob Good
@@ -238,6 +238,10 @@ FINI
 
 # User auth stuff!
 my ($DPL_auth, $DPL_userid, $workspaceName);
+
+if(exists $queryHash->{_workspaceName}) {
+    $workspaceName = $queryHash->{_workspaceName};
+}
 
 ($pl, $DPL_auth, $DPL_userid, $workspaceName) = eval { $pl->DPL_login($workspaceName) };
 if($@) { errExit }
