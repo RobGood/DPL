@@ -1,0 +1,28 @@
+#!/bin/sh -e
+# $Id: git-add-and-commit,v 1.2 2013/04/18 16:10:20 rcgood Exp rcgood $  #%^)
+
+Pname="`exec basename $0`"
+Usage="Usage: $Pname <dir> <files> ..." 
+
+export EDITOR=vi
+
+dir="$1"
+if [ -z "$dir" ]; then
+    echo " !! $Usage" 1>&2
+    exit 1
+fi
+
+shift 1
+
+if [ -z "$@" ]; then
+    echo " !! $Usage" 1>&2
+    exit 1
+fi
+
+
+cd $dir
+
+git add -f $@
+git commit
+
+exit
