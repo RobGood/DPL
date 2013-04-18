@@ -1,6 +1,6 @@
 #!/usr/bin/perl -w
 # -*- coding: UTF-8 -*-
-# $Id: PrimaLisp.pm,v 1.459 2013/04/15 17:34:10 rcgood Exp $  #%^)
+# $Id: PrimaLisp.pm,v 1.460 2013/04/18 17:07:56 rcgood Exp $  #%^)
 #
 # This implements a PrimaLisp interpreter and some basic builtins.
 # Copyright (C) 2010-2013 Rob Good
@@ -21,7 +21,7 @@
 
 
 #X# doc_ClassDesc(<|
-# # $Id: PrimaLisp.pm,v 1.459 2013/04/15 17:34:10 rcgood Exp $
+# # $Id: PrimaLisp.pm,v 1.460 2013/04/18 17:07:56 rcgood Exp $
 # # |>, <|
 # # This class implements a Descriptor/PrimaLisp interpreter runtime environment.
 #X# |>)
@@ -33,11 +33,11 @@ BEGIN {
 
 #X# doc_PerlPackage(<|
 package PrimaLisp;
-$Version = '0.8.45';
-$VDate   = '2013-04-05';
+$Version = '0.8.46';
+$VDate   = '2013-04-18';
 #X# |>)
 
-$Version = sprintf '%s.%s', $Version, (split /\./, (split /\s+/, '$Revision: 1.459 $')[1])[1];
+$Version = sprintf '%s.%s', $Version, (split /\./, (split /\s+/, '$Revision: 1.460 $')[1])[1];
 
 
 #X# doc_PerlUses(0,
