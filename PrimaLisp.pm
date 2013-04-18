@@ -1,6 +1,6 @@
 #!/usr/bin/perl -w
 # -*- coding: UTF-8 -*-
-# $Id: PrimaLisp.pm,v 1.460 2013/04/18 17:07:56 rcgood Exp $  #%^)
+# $Id: PrimaLisp.pm,v 1.463 2013/04/18 19:19:24 rcgood Exp $  #%^)
 #
 # This implements a PrimaLisp interpreter and some basic builtins.
 # Copyright (C) 2010-2013 Rob Good
@@ -21,7 +21,7 @@
 
 
 #X# doc_ClassDesc(<|
-# # $Id: PrimaLisp.pm,v 1.460 2013/04/18 17:07:56 rcgood Exp $
+# # $Id: PrimaLisp.pm,v 1.463 2013/04/18 19:19:24 rcgood Exp $
 # # |>, <|
 # # This class implements a Descriptor/PrimaLisp interpreter runtime environment.
 #X# |>)
@@ -37,7 +37,7 @@ $Version = '0.8.46';
 $VDate   = '2013-04-18';
 #X# |>)
 
-$Version = sprintf '%s.%s', $Version, (split /\./, (split /\s+/, '$Revision: 1.460 $')[1])[1];
+$Version = sprintf '%s.%s', $Version, (split /\./, (split /\s+/, '$Revision: 1.463 $')[1])[1];
 
 
 #X# doc_PerlUses(0,
@@ -644,7 +644,7 @@ my $Default_builtinsMap = {
 
          "cp $descDirSrcII/ChangeLog               $dir/$descDirDstII ",
          "cp $descDirSrcII/Credits                 $dir/$descDirDstII ",
-         "cp $descDirSrc/system-version          $dir/$descDirDstII ",
+         "cp $descDirSrcII/system-version          $dir/$descDirDstII ",
 
          "cp $descDirSrcII/BaseTests               $dir/$descDirDstII ",
          "cp $descDirSrcII/Benchmarks              $dir/$descDirDstII ",
@@ -681,7 +681,7 @@ my $Default_builtinsMap = {
          "cp $descDirSrcII/wk-log                  $dir/$descDirDstII ",
 
          "cp $descDirSrcII/hw          $dir/$descDirDstII ",
-         "cp $descDirSrcII/upload      $dir/$descDirDstII ",
+         # "cp $descDirSrcII/upload      $dir/$descDirDstII ",
 
         );
 
@@ -759,7 +759,7 @@ my $Default_builtinsMap = {
     'help/usage3' => "(help -pattern-) : Returns usage message for functions starting with -pattern-.", 
     'help' => sub {
         my ($o, $args) = @_;
-        # _report(" >> help($o, $args)");
+        # _report([" >> help(%s, %s)", $o, $args]);
     
         my $msg;
 
@@ -779,7 +779,7 @@ my $Default_builtinsMap = {
 
             # The function's usage message is an attribute of the variable holding the function.
             my $attr = "$fn/usage";
-			# _report $attr;
+			# _report([ 'attr: %s', $attr]);
 
             my @attrs;
 
