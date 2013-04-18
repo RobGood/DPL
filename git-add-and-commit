@@ -1,5 +1,5 @@
 #!/bin/sh -e
-# $Id: git-add-and-commit,v 1.2 2013/04/18 16:10:20 rcgood Exp rcgood $  #%^)
+# $Id: git-add-and-commit,v 1.3 2013/04/18 16:46:33 rcgood Exp $  #%^)
 
 Pname="`exec basename $0`"
 Usage="Usage: $Pname <dir> <files> ..." 
