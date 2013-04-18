@@ -4,12 +4,11 @@ Deploying with git
 Push updates to repo from dev host
     cd Descriptor_PrimaLisp
     ./report-git-statuses
-    # Work on those dirs that have changes.
-    pd DIR
-    git add foo ...
-    git commit -m MESSAGE
-    popd
 
+    # Work on those dirs that have changes.
+    ./git-add-and-commit dir file ...
+
+    ./update-lib-timestamp what-u-need
     ./report-git-statuses -push
 
 Pull updates from repo to server host
@@ -19,4 +18,4 @@ Pull updates from repo to server host
 
 --
 # ©2013 Rob Good
-# $Id: README-git-deploy,v 1.2 2013/04/15 16:53:09 rcgood Exp $  #%^)
+# $Id: README-git-deploy,v 1.2 2013/04/15 16:53:09 rcgood Exp rcgood $  #%^)
