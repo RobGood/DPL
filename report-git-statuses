@@ -1,5 +1,5 @@
 #!/bin/sh -e
-# $Id: report-git-statuses,v 1.5 2013/04/17 18:43:02 rcgood Exp $  #%^)
+# $Id: report-git-statuses,v 1.6 2013/04/19 04:15:17 rcgood Exp $  #%^)
 
 Pname="`exec basename $0`"
 Usage="Usage: $Pname"
@@ -25,10 +25,21 @@ for dir in $dirList; do
         # echo " -- $Pname: no git repo here: $dir"
         :
     else
-        echo " -- $Pname: dir: $dir"
-        ( cd $dir && git status )
+        ( cd $dir && git status ) > .st
+        files="`grep 'modified:' .st | awk '{print $3}'`"
+
+        cat .st
+
+        if [ -n "$files" ]; then
+            echo ''
+            for f in $files; do echo "    (cd $dir && git diff $f)"; done
+            echo "    ./git-add-and-commit $dir $files"
+            echo ''
+        fi
+
+        rm .st
+
         eval $gitPushCmd || true
-        echo ''
     fi
 done
 
