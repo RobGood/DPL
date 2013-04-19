@@ -1,5 +1,5 @@
 #!/bin/sh -e
-# $Id: report-git-statuses,v 1.6 2013/04/19 04:15:17 rcgood Exp $  #%^)
+# $Id: report-git-statuses,v 1.7 2013/04/19 05:43:46 rcgood Exp $  #%^)
 
 Pname="`exec basename $0`"
 Usage="Usage: $Pname"
@@ -27,6 +27,7 @@ for dir in $dirList; do
     else
         ( cd $dir && git status ) > .st
         files="`grep 'modified:' .st | awk '{print $3}'`"
+        files="`echo $files`"
 
         cat .st
 
