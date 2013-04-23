@@ -1,6 +1,6 @@
 #!/usr/bin/perl -w
 # -*- coding: UTF-8 -*-
-# $Id: dplx,v 1.86 2013/04/22 17:05:38 rcgood Exp $  #%^)
+# $Id: dplx,v 1.87 2013/04/23 16:35:32 rcgood Exp $  #%^)
 #
 # This is the DPL webservice endpoint dispatcher
 # Copyright (C) 2010-2013 Rob Good
@@ -112,7 +112,8 @@ if(@ARGV && $ARGV[0] ne '') {
 $ENV{REQUEST_METHOD}  = 'GET'
   unless defined $ENV{REQUEST_METHOD};
 
-if($ENV{HTTP_USER_AGENT} =~ /Googlebot/) {
+if($ENV{HTTP_USER_AGENT} =~ /Googlebot/ ||
+   $ENV{HTTP_USER_AGENT} =~ /msnbot/       ) {
     setpriority(0, 0, 18);
 }
 
