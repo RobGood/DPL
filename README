@@ -2,6 +2,10 @@ DPL (Descriptor / PrimaLisp) v0.8.45.459 / 2013-04-05
 
 This is the initial release of DPL.
 
+I am working towards making the installation as simple as:
+
+  git clone https://github.com/RobGood/DPL.git
+  DPL/dpl-install
 
 Known Bugs
 
@@ -24,6 +28,8 @@ Future Directions
 re-implement dple as DPL app
 standalone HTTP(S) server
 integrate code mirror for better a dple editing UI.
+
+ ... lots more ...
 
 --
 # ©2010-1023 Rob Good
