@@ -1,0 +1,98 @@
+#!/bin/sh -e
+
+
+echo "setting up DPL workspace..."
+
+mkdir -p ~/wk
+cd ~/wk
+
+echo "removing old install... "  # BUT NOT lib-site !!
+rm -rf DPL
+
+
+reposURL=https://github.com/RobGood
+reposList="
+lib-dpl
+lib-primal
+lib-what-u-need
+"
+
+echo "cloning git repos: DPL $reposList ..."
+git clone $reposURL/DPL
+(
+  mkdir -p DPL/descriptor-dir/.ii
+  cd DPL/descriptor-dir/.ii
+  for repos in $reposList; do
+    git clone $reposURL/$repos
+  done
+)
+
+if [ ! -d lib-site ]; then
+    git clone $reposURL/lib-site
+    (
+        cd DPL/descriptor-dir/.ii
+        ln -s ../../../lib-site
+    )
+fi
+
+(
+  echo "perming lib-* ..."
+  for d in lib-*; do mkdir -p $d/.ii; done
+  chmod 777 DPL/descriptor-dir DPL/descriptor-dir/.ii lib-* lib-*/.ii
+)
+
+
+# This one shouldn't be needed!
+(
+  echo "bug workaround..."
+  mkdir -p DPL/descriptor-dir/.import
+  cd DPL/descriptor-dir/.import
+  ln -s ../../../lib-dpl/.import/Core.dpli
+  ln -s ../../../lib-dpl/.import/Core_sockets.dpli
+  ln -s ../../../lib-dpl/.import/Authentication_DPL.dpli
+  ln -s ../../../lib-dpl/.import/Authentication_ActiveDirectory.dpli
+  ln -s ../../../lib-primal/.import/Authentication_Primal.dpli
+)
+
+sudo sh -c '
+  echo "installing into /usr/lib/cgi-bin..."
+  cd /usr/lib/cgi-bin
+  rm -rf dplx dple eval descriptor-dir
+  ln -s ~/wk/DPL/dplx
+  ln -s ~/wk/DPL/dple
+  ln -s ~/wk/DPL/descriptor-dir
+  ln -s dplx eval
+
+
+  echo "installing into /usr/local/bin..."
+  cd /usr/local/bin
+  rm -f dpl dplx dpld dple dpl-depends
+  ln -s ~/wk/DPL/dpl
+  ln -s ~/wk/DPL/dple
+  ln -s ~/wk/DPL/dpld
+  ln -s ~/wk/DPL/dplx
+  ln -s ~/wk/DPL/dpl-depends
+
+
+  echo "installing into /usr/local/lib/perl..."
+  cd /usr/local/lib/perl
+  rm -f PrimaLisp.pm
+  ln -s ~/wk/DPL/PrimaLisp.pm
+
+
+  echo "installing into /var/www..."
+  cd /var/www
+  rm -f index.html facicon.ico
+  cp ~/wk/DPL/Apache/index.html .
+  cp ~/wk/DPL/Apache/favicon.ico .
+
+
+  echo "installing into /etc/apache2/sites-enbled..."
+  cd /etc/apache2
+  rm -f sites-enabled/*
+  cp -p ~/wk/DPL/Apache/sites-available/dpl sites-available
+  ln -s ../sites-available/dpl sites-enabled/dpl
+  /etc/init.d/apache2 restart
+
+'
+
