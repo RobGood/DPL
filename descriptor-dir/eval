@@ -1,0 +1,59 @@
+{
+   "README" : "This implements the DPL eval webservice endpoint",
+   "_dateCreated" : "Fri Dec 10 00:29:19 2010",
+   "_useCount" : 1193,
+   "api-entry-points" : "(hash\n  GET/                   top-page\n  GET/README             README\n  GET/Examples           examples/all\n  GET/Examples/~id~      examples/one\n  GET/Installation       install\n\n  GET/WriteYourOwn             write-your-own\n  GET/WriteYourOwn/~wyo-page~  write-your-own\n\n  GET/history             show-pos-in-history\n  GET/history/~pos~      show-pos-in-history\n  POST/                  post\n)",
+   "api-handlers" : {
+      "README" : "// return README info\n\n(= title 'PrimaLisp README')\n(= path /README)\n(= name html)\n\n(desc-read doc eval-docs)\n\n(ct text/html)(bl)\n(emit\n (html-html {} \n  (concat\n   (html-head (concat\n    (html-title $title)))\n\n  (html-body (hash link white vlink '#a0a0a0' text white  bgcolor black)\n   (desc-eval $doc $path $name)\n\n))))",
+      "examples" : {
+         "all" : "(= title 'PrimaLisp Examples')\n\n// (= path '/Docs/Examples')\n// (= doc  $self)\n   (= path '/')\n   (desc-read doc eval-docs-examples)\n\n(= sub-path '')\n\n(= n 0)\n\n\n(def-fn emit-one-example (name -- tmp value)\n  (= tmp (first (split - $name)))\n  (report 'tmp: %s' $tmp)\n  // (if (ne $tmp (catch ($tmp) '')) (return ''))\n\n\n  (= tmp (if (&& (eq / $path) (ne '' $sub-path)) $sub-path \"$path$sub-path\"))\n\n  (= value (hash-get $doc $tmp $name))\n  (if (is-undef $value)\n    (throw \"Shouldn't be undef here, tmp: $tmp, path: $path, sub-path: $sub-path, name: $name\"))\n\n  (if (hash? $value)\n     (return (join '\\n' (map-list (fn (name2 -- value)\n          // (report ' name: %s/%s' $name $name2)\n          (var-push sub-path (concat $sub-path \"/$name\"))\n          (= value (utf8-decode (emit-one-example $name2)))\n          (var-pop sub-path)\n          $value)\n        (sort-alpha (hash-keys $value / ))))))\n\n  (= value (utf8-decode $value))\n\n  // (report 'value: %s' $value)\n  (concat\n    <hr/> \n    (if (eq '' $sub-path)\n      (sprintf ' <b> example %s</a></b>\\n%s\\n'\n          $name (eval-all $value))\n\n      (concat\n        (sprintf '#% 3d. '                          (++_ n))\n        (sprintf '<a name=\"%s\"/>'                   (substr $sub-path 1))\n        <b>\n        (sprintf '<a title=\"%s\" href=\"%s\">%s / %s</a>'\n               'Click to load this example.'\n               (sprintf /api/eval/Examples%s~%s $sub-path $name)\n               (substr $sub-path 1)\n               $name)\n        </b>\n        (sprintf '<pre>\\n%s</pre>\\n'                (xmlencode $value))\n      ))))\n\n(= examples (sort-alpha (hash-keys $doc (if (eq '' $path) / $path))))\n(report 'examples: %s' (desc-to-string $examples))\n\n\n(ct text/html)(bl)\n(emit\n (html-html {} (concat\n  (html-head {} (concat\n   (html-title $title)))\n\n  (html-body { link '#808080' vlink '#404040' text black  bgcolor '#f0f0f0' }\n   (concat\n    (html-h 4 'PrimaLisp Examples')\n    (join '\\n' (map-list emit-one-example $examples))\n\n  <hr/>\n\n  )))))",
+         "one" : "(= title 'Eval PrimaLisp')\n\n(= sub-path (split '~' (urldecode $req-id)))\n(= num (pop $sub-path))\n(= sub-path (join '/' $sub-path))\n\n(desc-read doc eval-docs)\n(desc-read exmp eval-docs-examples)\n\n(= blurb (utf8-decode (hash-get $exmp \"/$sub-path\" $num)))\n(if (is-undef $blurb) (throw \"undefined blurb here\"))\n\n(hash-eval $doc / html)"
+      },
+      "install" : "(= title 'DPL Installation')\n(= path /Installation)\n(= name html)\n\n(desc-read doc eval-docs)\n\n(ct text/html)(bl)\n(emit\n (html-html {}\n  (concat\n   (html-head (concat\n    (html-title $title)))\n\n  (html-body (hash link white vlink '#a0a0a0' text white  bgcolor black)\n   (desc-eval $doc $path $name)\n\n))))",
+      "post" : "(= expr-to-eval (trim (utf8-decode (hash-get $query-hash / expr))))\n(if (&& (defined? $expr-to-eval) (ne '' $expr-to-eval))\n  (return (handler $expr-to-eval)))\n\n(= expr-to-eval (trim (utf8-decode $request-content)))\n(handler $expr-to-eval)",
+      "show-pos-in-history" : "(= title 'Eval PrimaLisp')\n\n(= hist (new-inst eval-history $session-id))\n(= hist-list ($hist get-hist-log))\n(= n-hist-1 (- (list-len $hist-list) 1))\n(=? req-pos $n-hist-1)\n\n(= rec (ith $hist-list $req-pos))\n\n(= blurb  (utf8-decode (hash-get $rec / expr)))\n(= blurb2 (catch (desc-to-string (hash-get $rec / val))))\n(=? blurb2 (utf8-decode (hash-get $rec / val)))\n\n(= expr-ue (urlencode (utf8-encode $blurb)))\n(= host (hash-get (http-headers) / Host))\n(= share-url (sprintf http://%s/api/eval?load=%s $host $expr-ue))\n\n(= (get-n-rows-cols $blurb))\n\n(desc-read doc eval-docs)\n(hash-eval $doc / html)",
+      "top-page" : "(= title 'Eval PrimaLisp')\n\n(= expr-to-eval (trim (hash-get $query-hash / expr)))\n(if (&& (defined? $expr-to-eval) (ne '' $expr-to-eval)) (return (handler $expr-to-eval)))\n\n(= load (trim (hash-get $query-hash / load)))\n\n/*\n(if (&& (defined? $load) (ne '' $load)) (do\n  (= lines (split '\\n' $load))\n  (= nrows (+ 1 (list-len $lines)))\n  (= ncols 0)\n  (report-vars lines)\n  (map-list (fn (line) (if (< $ncols (len $line)) (= ncols (len $line)))) $lines)\n  (= ncols (+ 3 $ncols))\n))\n*/\n\n(= (get-n-rows-cols $load))\n\n(=? nrows 25)\n(=? ncols 80)\n\n(= blurb  (if\n  (&& (defined? $load) (ne '' $load))  $load\n  (if (defined? $session-id)             /*  \"// Welcome back $session-id\" */\n    (sprintf '// %s%s%s'\n      (date)\n      (if (defined? $userid)         \" -- $userid\"        '')\n      (if (defined? $workspace-name) \" ($workspace-name)\" '')\n    )\n    '//    Enter PrimaLisp expressions below...          then \\'evaluate\\' them -->')))\n\n(desc-read doc eval-docs)\n\n(hash-eval $doc / html)",
+      "write-your-own" : "(= title 'Write your own PrimaLisp!')\n(= path /Write-your-own)\n(= name html)\n\n(desc-read doc eval-docs)\n\n(ct text/html)(bl)\n(emit\n (html-html {} (concat\n  (html-head (concat\n   (html-title $title)))\n\n  (html-body (hash link white vlink '#a0a0a0' text white  bgcolor black)\n             // (hash link '#808080' vlink '#404040' text black  bgcolor '#f0f0f0')\n   (desc-eval $doc $path $name)\n\n))))"
+   },
+   "get-n-rows-cols" : "(fn (text -- lines nrows ncols)\n  (if (|| (undef? $text) (eq '' $text)) (return {}))\n\n  (= lines (split '\\n' $text))\n  (= nrows (+ 1 (list-len $lines)))\n  (= ncols 0)\n  (map-list (fn (line) (if (< $ncols (len $line)) (= ncols (len $line)))) $lines)\n  (= ncols (+ 3 $ncols))\n\n  $[nrows ncols]\n)",
+   "handler" : "(def-fn eval-passed-in-code-&-capture-exceptions ()\n  (catch (eval-all $expr-to-eval) $[_err _cs]))\n\n(fn (expr-to-eval -- val hist) (catch\n  (do\n    (var-clear response-header-complete)\n    (var-clear content-type)\n    (var-clear content-disposition)\n\n    (if (defined? $session-id) (do\n      (report 'Using session id %s' $session-id)\n      (= hist (new-inst eval-history $session-id $expr-to-eval))\n    ))\n\n    (var-push hist)\n    // (report 'about to eval %s' $expr-to-eval)\n    (= val (eval-passed-in-code-&-capture-exceptions))\n    // (report 'got val %s' (desc-to-string $val {ascii 1}))\n    (var-pop hist)\n\n    (if (defined? $hist) (do\n      (hash-set $hist / val $val)\n      (hash-set $hist / t1 (time))\n      // (report-vars expr-to-eval val)\n      ($hist add)))\n\n\n    (if (defined? $response-header-complete) (return))\n\n    (if (undef? $val)\n        (do (emith 'Status: 204 No Content')(bl) (return)))\n\n    (if (defined? $content-disposition)\n       (emith \"Content-Disposition: $content-disposition\"))\n\n    // (= retval (catch (desc-to-string $val)))\n\n    (if (|| (list? $val) (hash? $val))\n       (return (do\n         (ct application/json)(bl)\n         (print (desc-to-string $val)))))\n\n    (ct $content-type)(bl)\n    (emit $val))\n\n  (do\n    (emith 'Status: 400 Bad Request')\n    (ct)(bl)\n    (emit \"Exception: '$_err'\")))\n)",
+   "main" : "(fn () )",
+   "on-load" : "(fn ()\n  (desc-read _ HTML-macros)\n  (def-hash-fn $self / handler)\n  (def-hash-fn $self / get-n-rows-cols)\n\n  (= host (hash-get (http-headers) / Host))\n)",
+   "rcs-id" : "$Id: eval,v 1.1215 2013/03/27 20:59:02 apache Exp apache $",
+   "request-from-client" : {
+      "schema" : {
+         "HTTP" : {
+            "GET" : {
+               ".on-match." : "(hash-eval $self /api-handlers top-page)",
+               "Examples" : {
+                  ".on-match." : "(hash-eval $self /api-handlers/examples all)",
+                  "~id~" : {
+                     ".on-match." : "(hash-eval $self /api-handlers/examples one)"
+                  }
+               },
+               "Installation" : {
+                  ".on-match." : "(hash-eval $self /api-handlers install)"
+               },
+               "README" : {
+                  ".on-match." : "(hash-eval $self /api-handlers README)"
+               },
+               "WriteYourOwn" : {
+                  ".on-match." : "(hash-eval $self /api-handlers write-your-own)",
+                  "~wyo-page~" : {
+                     ".on-match." : "(hash-eval $self /api-handlers write-your-own)"
+                  }
+               },
+               "history" : {
+                  ".on-match." : "(hash-eval $self /api-handlers show-pos-in-history)",
+                  "~pos~" : {
+                     ".on-match." : "(hash-eval $self /api-handlers show-pos-in-history)"
+                  }
+               }
+            },
+            "POST" : {
+               ".on-match." : "(hash-eval $self /api-handlers post)"
+            }
+         }
+      }
+   }
+}

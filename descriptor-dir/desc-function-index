@@ -1,0 +1,10 @@
+{
+   "README" : "This generates forward and reverse indexes between function names and where they are defined.",
+   "_dateCreated" : "Tue Oct 30 14:42:58 2012",
+   "_useCount" : 61,
+   "get-new-vars-names" : "(fn (desc-name -- before after _ self parts)\n  // (report ' >> (%s %s)' $. $desc-name)\n  (= before (sort-alpha (hash-keys $:vars:)))\n\n  (desc-read _ $desc-name {no-on-load 1})\n  (if (fn? (hash-get $_ / main))\n    (desc-read _ dplx))\n  (desc-read self $desc-name {reload 1})\n\n  (= after (sort-alpha (hash-keys $:vars:)))\n\n  (= parts (split ' ' (hash-get $self / rcs-id)))\n  (shift $parts) (shift $parts)\n  (pop $parts)  (pop $parts)  (pop $parts)  (pop $parts)\n  (= Desc-rcs-id $parts)\n\n  (hash-get (list-diff $before $after) / in-2))",
+   "make-index" : "(fn (desc-to-analyze -- fn-name-to-desc-name-path desc-name-path-to-fn-name\n                     -- get-fn-path-names add-one)\n (namespace (time) $[desc-to-analyze  get-new-vars-names]\n  (= new-vars (get-new-vars-names $desc-to-analyze))\n\n  (= idx-0 {})\n  (= idx-1 {})\n\n  (def-fn get-new-fn-names ()\n    (map-list (fn (_) (if (< (len $_) 5) (report 'short: %s' $_))(substr $_ 0 -5))\n      (grep (fn (_) (eq /path (substr $_ -5)))\n        $new-vars)))\n\n  (def-fn index-one-function (fn-name -- %! key)\n    (= key (sprintf '%s %s' $\"$fn-name/desc-name\" $\"$fn-name/path\"))\n    (hash-set $idx-0 / $fn-name $key)\n\n    (= %! [$idx-1 / $key])\n    (push (|| (hash-get @$%!) (hash-set @$%! [])) $fn-name))\n\n  (map-list index-one-function (get-new-fn-names))\n\n  (= fn-name-to-desc-name-path $idx-0)\n  (= desc-name-path-to-fn-name $idx-1)\n\n  $[fn-name-to-desc-name-path desc-name-path-to-fn-name Desc-rcs-id]\n ))",
+   "new" : "(fn () )",
+   "on-load" : "(fn ()\n  (def-hash-fn $self {\n    / [\n      make-index\n      get-new-vars-names\n    ]\n  })\n)",
+   "rcs-id" : "$Id: desc-function-index,v 1.67 2013/03/20 13:35:10 apache Exp apache $"
+}

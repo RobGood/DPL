@@ -1,0 +1,7 @@
+{
+   "README" : "Call this to download a DPL distribution file.",
+   "_dateCreated" : "Tue Aug 30 10:36:59 2011",
+   "_useCount" : 8,
+   "main" : "(fn ()\n  (= dist (get-DPL-dist))\n\n  (emith \"Content-Disposition: $content-disposition\")\n  (ct application/octet-stream)\n  (bl)\n\n  (emit $dist)\n)",
+   "rcs-id" : "$Id: get-DPL-dist,v 1.9 2012/03/13 06:11:04 apache Exp apache $"
+}

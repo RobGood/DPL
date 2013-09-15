@@ -1,0 +1,35 @@
+{
+   "_isNew" : 1,
+   "index" : {
+      "" : "0-command",
+      "dpl" : 1,
+      "dplx" : 2
+   },
+   "main" : "(fn ()\n  (= did-one 0)\n  (foreach dst-name $path-list\n    (= did-one 1)\n    (desc-read dst \"$dst-name.man.docs\")\n    (hash-set $dst /pages 0000-template (hash-get $self /pages 0000-template))\n    (hash-set $dst /      main          (hash-get $self /      main         )) // ;)\n    (desc-write $dst \"$dst-name.man.docs\"))\n\n  (ct)(bl)\n  (print (if $did-one ok 'nothing happens'))\n)",
+   "pages" : {
+      "0000-template" : {
+         "0-command" : "",
+         "00-Name" : "",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "1" : {
+         "0-command" : "dpl",
+         "00-Name" : "dpl - Commandline interface for DPL",
+         "01-Synopsis" : "// dpl\n// dpl -eval 'expressions...'\n// dpl -update\n// dpl -help\n// dpl infile",
+         "02-Description" : "This is the commandline interface for DPL.\n<p>\nBy default it puts you into an REPL interface.\n<br/>\nIt can also be used to evaluate expressions from a commandline or file,\nand to update the local installation.\n</p>",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link dplx)"
+      },
+      "2" : {
+         "0-command" : "dplx",
+         "00-Name" : "dplx - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      }
+   }
+}

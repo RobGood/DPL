@@ -1,0 +1,14 @@
+{
+   "_dateCreated" : "Fri Nov  5 22:00:58 2010",
+   "_useCount" : 207,
+   "adj" : "(fn (var-name u)\n  (= $var-name (* 1000 $$var-name) $[u]))",
+   "adj-time" : "(fn (var-name)\n  (if (< $$var-name 1) (adj $var-name ms))\n  (if (< $$var-name 1) (adj $var-name us))\n  (if (< $$var-name 1) (adj $var-name ns))\n)",
+   "find-primes" : "(fn (n )  (report \" >> (find-primes)\")\n  (= ret [])\n  (push $ret 2 3)\n\n  (= primes [3])\n  (= n 5)\n\n  (def-fn is-prime ()\n     (= upper (sqrt $n))\n     (= test-divisor (first $primes))\n\n     (while (% $n $test-divisor) \n          (if (<= $test-divisor $upper)\n               (= test-divisor (next $primes))\n               (return 1)))\n\n     ())\n\n  (while (< (list-len $primes) 499)\n     (if (is-prime)  (push $ret (push $primes $n)))\n     (= n (+ $n 2)))\n\n  (push $out (sprintf 'Found %d primes, last one: %d' (list-len $ret) (first (reverse $ret))))\n  // (map-list report $ret)\n\n  $ret\n)",
+   "main" : "(fn ()\n  (= out [])\n  (report \" >> (main)\")\n  (= start-date (date))\n\n  (= n-runs 1)\n\n  (= elapsed-dry  (run-dry-test   $n-runs)             {u s})\n  (= elapsed-live (run-live-test  $n-runs find-primes) {u s})\n\n  (if (> $elapsed-dry $elapsed-live) (throw \"wtf? dry: $elapsed-dry, live: $elapsed-live\"))\n\n  (= elapsed      (- $elapsed-live $elapsed-dry) {u s})\n  (= elapsed-call (/ $elapsed $n-runs)           {u s})\n\n  (adj-time elapsed-dry)\n  (adj-time elapsed-live)\n  (adj-time elapsed)\n  (adj-time elapsed-call)\n\n  (push $out (sprintf \"Started at $start-date\"))\n  (push $out (sprintf '  elapsed-dry: %.3f%s' $elapsed-dry  $elapsed-dry/u))\n  (push $out (sprintf ' elapsed-live: %.3f%s' $elapsed-live $elapsed-live/u))\n  (push $out (sprintf '      elapsed: %.3f%s' $elapsed      $elapsed/u))\n  (push $out (sprintf ' elapsed/call: %.3f%s' $elapsed-call $elapsed-call/u))\n\n  (= s (statistics))\n  (map-list (fn (k)\n    (push $out (sprintf 'stats:  %s : %s' $k (hash-get $s / $k))))\n    (sort-alpha (hash-keys $s /)))\n\n  (reply $out)\n)",
+   "null" : "(fn (n)  (report \" >> (null)\")\n  [42 42])",
+   "on-load" : "(fn () \n  (def-desc-fn $self / main)\n  (def-desc-fn $self / reply)\n  (def-desc-fn $self / null)\n  (def-desc-fn $self / find-primes)\n  (def-desc-fn $self / adj)\n  (def-desc-fn $self / adj-time)\n  (def-desc-fn $self / run-live-test)\n  (def-desc-fn $self / run-dry-test)\n)",
+   "rcs-id" : "$Id: Benchmarks,v 1.208 2012/03/10 18:36:03 apache Exp apache $",
+   "reply" : "(fn (out)\n  (print \"Content-type: text/plain\\r\\n\\n\")\n\n  (map-list println $out)\n)",
+   "run-dry-test" : "(fn (n)\n  (= start (time))\n  (while (> $n 0) (= n (- $n 1))      )\n  (= end (time))\n\n  (- $end $start)\n)",
+   "run-live-test" : "(fn (n fn)\n  (= start (time))\n  (while (> $n 0) (= n (- $n 1)) ($fn))\n  (= end (time))\n\n  (- $end $start)\n)"
+}

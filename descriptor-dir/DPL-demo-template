@@ -1,0 +1,16 @@
+{
+   "README" : "This is a template to copy as the start of a DPL demo app\n\nto make a copy, eval this:\n(desc-read self DPL-demo-template)\n(desc-write $self NEW-DEMO-NAME-HERE)",
+   "_dateCreated" : "Thu Mar  1 16:44:22 2012",
+   "_useCount" : 73,
+   "api" : {},
+   "api-entry-points" : "{\n}",
+   "config" : {
+      "title" : "DPL demo app template"
+   },
+   "html" : {
+      "top" : "(html-html\n  (html-head\n    (html-title (get-versioned-title $title)))\n  (html-body $html-body-args\n    (html-h 3 (get-versioned-title-html $title)) \n\n    (bracket-link (html-link (sprintf http:/api/dple/%s $self/name) Edit))\n\n    /***  some html ... ***/\n\n    <hr/>\n  ))"
+   },
+   "main" : "(fn ()\n  (reply-html (hash-eval $self /html top)))",
+   "on-load" : "(fn ()\n  (desc-read _ HTML-macros)\n\n  (= html-body-args (hash\n     link    '#606060'\n     vlink   '#505050'\n     text    '#303030'\n     bgcolor  PaleGoldenRod\n  ))\n\n  (= title (hash-get $self /config title))\n)",
+   "rcs-id" : "$Id: DPL-demo-template,v 1.10 2012/03/07 05:29:30 apache Exp apache $"
+}

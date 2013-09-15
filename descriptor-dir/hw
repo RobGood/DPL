@@ -1,0 +1,9 @@
+{
+   "README" : "'Hello world' in DPL, slightly embellished.\n  ('Hello world' in PrimaLisp would be just:  (print 'Hello world\\n') )\n\nHit [run] in the top right corner to see it run.\nOr hit  http://HostName/api/dplx/hw  from a web client, e.g browser...\n\nYou can also run this Descriptor on the command line as:\n  dpl -eval '(desc-read self hw) (main) (repl)'\n\nor even:\n  dplx hw",
+   "_dateCreated" : "Tue Nov 23 17:09:52 2010",
+   "_useCount" : 96,
+   "main" : "(fn ()\n  (print 'Content-Type: text/plain\\r\\n')   // not optional, but type could vary.\n  (print 'Status: 200 ok, ok?\\r\\n')        // optional for 200 actually.\n  (print '\\r\\n')                           not optional.\n\n  and...  that and this aren't even 'comments'!  Ha! Ha! PrimaLisp doesn't care!  8( )\n\n  This is code too, but these are just strings,\n  evaluating to themselves and evaporating as you read them...\n    (eval just be careful about using parens 8-)\n\n  Hey, this line of code *is* actually reading natural language text!\n  Who says NLP is hard? ;)\n\n  And here's the program can't you see?\n  (printf 'Hello world at %s' (date))\n)",
+   "on-load" : "(fn ()\n  (def-desc-fn $self / main)\n)",
+   "on-load-comment" : "The function (on-load):\n  - is called when (desc-read) loads a descriptor,\n  - should define any other functions used within the descriptor,\n     e.g. dplx expects (main) to be defined, and to print an HTTP\n          header, blank line and body to stdout when called.",
+   "rcs-id" : "$Id: hw,v 1.11 2012/01/21 02:49:59 apache Exp apache $"
+}

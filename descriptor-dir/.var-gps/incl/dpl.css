@@ -1,0 +1,96 @@
+/*  CSS data from JK via /api/dplx/incl/dple.css */
+/*  $Id: dpl.css,v 1.2 2013/03/21 16:11:14 rcgood Exp $ #%^) */
+
+body {
+ margin: 0px;
+ border: 18px solid black;
+ font-family: verdana;
+ font-size: 0.8em;
+ color: #000 !important;
+ /* background-color: #111 !important; */
+ background-color: #fff !important;
+ padding: 21px;
+}
+
+a {
+/* color: #E41913; */
+ color: #0060ff;
+ text-decoration: none;
+/* border-bottom: 1px dotted #333; */
+ border-bottom: 1px dotted #06f;
+}
+a:hover {
+/* color: #FF0000; */
+ color: #0080ff;
+ border-bottom: 1px solid #eee;
+}
+
+h3 {
+ font-size: 1.6em;
+ text-decoration: underline;
+ color: #000 !important;
+ text-shadow: 2px 2px 2px #CCC;
+}
+
+h4 {
+ font-size: 1.2em;
+ color: #000 !important;
+ text-decoration: none;
+ text-shadow: 2px 2px 2px #CCC;
+}
+
+table {
+ margin-bottom: 20px;
+ border: 1px solid black;
+ -moz-box-shadow: 5px 5px 5px #999;
+ -webkit-box-shadow: 5px 5px 5px #999;
+ box-shadow: 5px 5px 5px #999;
+}
+
+th {
+ padding: 5px;
+ font-size: 0.8em;
+ color: #000;
+ text-transform:capitalize;
+ background-color: #E41913;
+ border-bottom: 1px solid black;
+ border-right: 1px solid black;
+ text-shadow: 1px 1px 1px #992222;
+}
+
+td {
+ background-color: #f0f0f0 !important;
+ font-size: 0.8em;
+ padding: 2px;
+ border-right: 1px dotted #666;
+}
+
+tr:nth-child(2n+1) td {
+ background-color: #E0E0E0 !important;
+}
+
+pre {
+ overflow: auto;
+ font-family: Courier;
+ font-size: 1.125em;
+ background-color: #000;
+ color: #FFBF00;
+ padding: 20px;
+ border: 1px solid black;
+ -moz-box-shadow: 5px 5px 5px #999;
+ -webkit-box-shadow: 5px 5px 5px #999;
+ box-shadow: 5px 5px 5px #999;
+}
+
+pre.exception {
+ overflow: auto;
+ font-family: Courier;
+ /* font-size: 0.875em; */
+ background-color: #500;
+ color: #FFCF00;
+ padding: 20px;
+ border: 1px solid black;
+ -moz-box-shadow: 5px 5px 5px #999;
+ -webkit-box-shadow: 5px 5px 5px #999;
+ box-shadow: 5px 5px 5px #999;
+}

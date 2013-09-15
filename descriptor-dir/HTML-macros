@@ -1,0 +1,62 @@
+{
+   "00-Intro.html" : "<h2>Intro</h2><a href='http://localhost'><b>Hello world!! at Mon Oct 25 16:30:48 2010.</b></a>",
+   "00-Intro.html.pfl" : "(concat\n(html-h 2 Intro)\n(html-link \n   http://localhost\n   (html-bold (sprintf \"Hello world!! at %s.\" (date))))\n)",
+   "README" : "This provides some basic HTML generating functions.",
+   "_dateCreated" : "Tue Aug 17 12:51:04 2010",
+   "_useCount" : 619,
+   "action-run" : "(fn (name)\n  (eprint 'Generating pages...\\n')\n  (generate-html $self / 00-Intro)\n  (eprint 'Done.\\n'))",
+   "generate-html" : "(fn (desc path name)\n  (if (eq $path '') (set-var path /))\n\n  // Generate .html from .html.pfl\n  (desc-set     $desc $path \"$name.html\"\n     (desc-eval $desc $path \"$name.html.pfl\"))\n\n  (desc-write $desc $action-name))",
+   "js" : {
+      "README" : "Some javascript ui components are defined here.",
+      "js-fn-toggle" : "// help toggle a div, see (html-div-toggle)\n\n(fn () <<FINI\n// http://www.randomsnippets.com/2008/02/12/how-to-hide-and-show-your-div/\n\nfunction toggle(eleId, textId, show, hide) {\n  var ele = document.getElementById(eleId);\n  var text = document.getElementById(textId);\n  if(ele.style.display == \"block\") {\n    ele.style.display = \"none\";\n    text.innerHTML = show;\n  }\n  else {\n    ele.style.display = \"block\";\n    text.innerHTML = hide;\n  }\n} \nFINI)"
+   },
+   "macros" : {
+      "html--wrapper" : "/* moved to Core.dpli*/\n(fn (tag body attrs)\n  (if (&& (undef? $body) (defined? $attrs))\n    (do (report '## %s ##' $tag) (= body $attrs) (var-clear attrs)))\n  (if (defined? $body) (= body (deep-join $body)))\n\n  (if (undef? $attrs)\n    (return (if (undef? $body)\n      \"<$tag/>\"\n      (sprintf \"<$tag>%s</$tag>\" $body))))\n\n  (= attrs\n    (if (defined? $attrs)\n      (join ' ' (map-list (fn (_)\n          (sprintf '%s=\"%s\"' $_ (xmlencode (hash-get $attrs / $_))))\n        (hash-keys $attrs /)))\n      ''))\n\n  (if (|| (undef? $body) (eq '' $body))\n      (sprintf '<%s %s/>' $tag $attrs)\n      (sprintf '<%s %s>%s</%s>' $tag $attrs $body $tag)\n  )\n)",
+      "html-DOCTYPE" : "(fn () (sprintf '<!%s>' (join ' ' [\n  DOCTYPE\n  html\n  PUBLIC\n  '\"-//W3C//DTD XHTML 1.0 Transitional//EN\"'\n  '\"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\"'\n])))",
+      "html-a" : "(fn (attrs label)\n  (if (defined? $attrs)\n    (= attrs (join ' '\n      [ '' @(map-list (fn (_)\n          (sprintf '%s=\"%s\"' $_ (xmlencode (hash-get $attrs / $_))))\n        (hash-keys $attrs))]\n  )))\n\n  (=? attrs '')\n\n  (if (undef? $label) (= label (hash-get $attrs / href)))\n  (sprintf '<a%s>%s</a>' $attrs $label))",
+      "html-b" : "(fn (&body) (html--wrapper b $body))",
+      "html-body" : "(fn (attrs &body) (html--wrapper body $body $attrs))",
+      "html-bold" : "(fn (&body) (html--wrapper b $body))",
+      "html-br" : "(fn (attrs) (html--wrapper br '' $attrs))",
+      "html-comment" : "(fn (&body) (sprintf '<!--%s-->' (join ' ' $body)))",
+      "html-div" : "(fn (attrs &body) (html--wrapper div $body $attrs))",
+      "html-div-toggle" : "(fn (ele-id text-id text1 text2) (html-p\n  (html-a {id $text-id href \"javascript:toggle('$ele-id', '$text-id', ' ⊞ ', ' ⊟ ');\"} $text1)\n  (html-div {id $ele-id style 'display: none'} $text2)\n))",
+      "html-form" : "(fn (method action body) \n  (sprintf '<form method=\"%s\" action=\"%s\">%s</form>'\n    $method $action (concat $body)))",
+      "html-form-upload" : "(fn (url label file-name submit-label)\n (=? submit-label 'Upload File')\n (concat\n  (sprintf '<form enctype=\"multipart/form-data\" action=\"%s\" method=\"POST\">' $url)\n  (sprintf '%s <input name=\"%s\" type=\"file\"/> <br/>' $label $file-name)\n  (sprintf '<input type=\"submit\" value=\"%s\"/>' $submit-label)\n  </form>\n ))",
+      "html-h" : "(fn (n &body)  (html--wrapper \"h$n\" $body))",
+      "html-head" : "(fn (&body) (html--wrapper head $body))",
+      "html-html" : "(fn (attrs &body) (html--wrapper html $body $attrs))",
+      "html-i" : "(fn (&body) (html--wrapper i $body))",
+      "html-img" : "(fn (url width border map)\n   (map-list (fn (_) (if (undef? $$_) (= $_ ''))) [width border map])\n\n   (concat \n   \"<img src='$url'\"\n   (if (ne $width  '') \"   width='$width'\")\n   (if (ne $border '') \" border='$border'\")\n   (if (ne $map    '') \" usemap='#$map'\")\n   \"/>\"))",
+      "html-img-tag" : "(fn (attrs &body) (html--wrapper img $body $attrs))",
+      "html-input" : "(fn (type name value) \"<input type='$type' name='$name' value='$value'/>\")",
+      "html-input-tag" : "(fn (attrs &body) (html--wrapper input $body $attrs))",
+      "html-li" : "(fn (&body) (html--wrapper li $body))",
+      "html-link" : "(fn (url label title)\n  (if (undef? $label) (= label $url))\n  (if (undef? $title)\n    (sprintf '<a href=\"%s\">%s</a>' (xmlencode $url) $label)\n    (sprintf '<a href=\"%s\" title=\"%s\">%s</a>'\n      (xmlencode $url) (xmlencode $title) $label)))",
+      "html-link-tag" : "(fn (attrs &body) (html--wrapper link $body $attrs))",
+      "html-meta" : "(fn (attrs &body) (html--wrapper meta $body $attrs))",
+      "html-ol" : "(fn (&body) (html--wrapper ol $body))",
+      "html-p" : "(fn (&body) (html--wrapper p $body))",
+      "html-pre" : "(fn (&body) (html--wrapper pre $body))",
+      "html-script" : "(fn (attrs &body)\n  (if (! (hash? $attrs))\n    (= attrs {type $attrs}))\n  (html--wrapper script $body $attrs))",
+      "html-style" : "(fn (attrs &body)\n  (if (! (hash? $attrs))\n    (= attrs {type $attrs}))\n  (html--wrapper style $body $attrs))",
+      "html-table" : "(fn (attrs &body) (html--wrapper table $body $attrs))",
+      "html-table-grid" : "(fn (cfg items n-cols html-fn\n        -- I n-items n-rows n-rows-1 n-cols-1\n        -- table-tag tr-tag td-tag)\n  (= n-items (list-len $items))\n  (= n-rows (+\n    (int (/ $n-items $n-cols))\n    (if (== 0 (% $n-items $n-cols)) 0 1)))\n\n  (= n-cols-1 (- $n-cols 1))\n  (= n-rows-1 (- $n-rows 1))\n\n  (= $cfg)\n  (=? table-tag <table>)\n  (=? tr-tag    <tr>)\n  (=? td-tag    <td>)\n\n[\n  $table-tag\n  (foreach i (.. 0 $n-rows-1) [\n    $tr-tag\n    (foreach j (.. 0 $n-cols-1) \n      (= I (+ (* $n-rows $j) $i))\n    [\n      $td-tag\n      (html-fn (ith $items $I) (- $n-messages (I++)))\n      </td>\n    ])\n    </tr>\n  ])\n  </table>\n])",
+      "html-table-grid-cfg" : "(fn (cfg)\n\n)",
+      "html-td" : "(fn (attrs &body) (html--wrapper td $body $attrs))",
+      "html-textarea" : "(fn (type name rows cols body)\n  \"<textarea type='$type' name='$name' rows='$rows' cols='$cols'>$body</textarea>\")",
+      "html-title" : "(fn (&body) (html--wrapper title $body))",
+      "html-tr" : "(fn (attrs &body) (html--wrapper tr $body $attrs))",
+      "html-tt" : "(fn (&body) (html--wrapper tt $body))",
+      "html-ul" : "(fn (&body) (html--wrapper ul $body))"
+   },
+   "misc" : {
+      "bracket-link" : "(fn (link) (concat (html-b '[&nbsp;') $link (html-b '&nbsp;]')))",
+      "html-app-template" : "(fn (&args)\n  (html-html {}\n    (html-head\n      (html-title $app-title)\n      (html-comment \"$dpl-version-string $dpl-face\")\n      (html-script {language javascript} (js-fn-toggle show hide))\n      (html-style {} $<incl/dpl.css>))\n    (html-body {text white} # {link white vlink '#a0a0a0' text white bgcolor '#000000'}\n      @$args\n    )\n  )\n)"
+   },
+   "on-load" : "(fn ()\n  (def-hash-fn $self {\n    / [\n      generate-html\n    ]\n\n    /macros [\n      html--wrapper // made a builtin\n      html-DOCTYPE\n      html-a\n      html-b\n      html-body\n      html-comment\n      html-bold\n      html-br\n      html-div\n      html-div-toggle\n      html-form\n      html-h\n      html-head\n      html-html\n      html-i\n      html-img\n      html-img-tag\n      html-input\n      html-input-tag\n      html-li\n      html-link\n      html-link-tag\n      html-meta\n      html-ol\n      html-p\n      html-pre\n      html-script\n      html-style\n      html-table-grid\n      html-table-grid-cfg\n      html-td\n      html-textarea\n      html-title\n      html-table\n      html-tr\n      html-tt\n      html-ul\n      html-form-upload\n    ]\n\n    /misc [\n      bracket-link\n      html-app-template\n    ]\n\n    /rgb [\n      get-rgb-by-name\n    ]\n\n    /js [\n      js-fn-toggle\n    ]\n  })\n)",
+   "rcs-id" : "$Id: HTML-macros,v 1.165 2013/04/21 03:13:40 apache Exp apache $",
+   "rgb" : {
+      "get-rgb-by-name" : "(= grbn-rgb-map {\n Black 000000 Navy 000080 DarkBlue 00008B MediumBlue 0000CD Blue 0000FF\n DarkGreen 006400 Green 008000 Teal 008080 DarkCyan 008B8B DeepSkyBlue 00BFFF\n DarkTurquoise 00CED1 MediumSpringGreen 00FA9A Lime 00FF00 SpringGreen 00FF7F Aqua 00FFFF\n Cyan 00FFFF MidnightBlue 191970 DodgerBlue 1E90FF LightSeaGreen 20B2AA ForestGreen 228B22\n SeaGreen 2E8B57 DarkSlateGray 2F4F4F DarkSlateGrey 2F4F4F LimeGreen 32CD32 MediumSeaGreen 3CB371\n Turquoise 40E0D0 RoyalBlue 4169E1 SteelBlue 4682B4 DarkSlateBlue 483D8B MediumTurquoise 48D1CC\n Indigo 4B0082 DarkOliveGreen 556B2F CadetBlue 5F9EA0 CornflowerBlue 6495ED MediumAquaMarine 66CDAA\n DimGray 696969 DimGrey 696969 SlateBlue 6A5ACD OliveDrab 6B8E23 SlateGray 708090\n SlateGrey 708090 LightSlateGray 778899 LightSlateGrey 778899 MediumSlateBlue 7B68EE LawnGreen 7CFC00\n Chartreuse 7FFF00 Aquamarine 7FFFD4 Maroon 800000 Purple 800080 Olive 808000\n Gray 808080 Grey 808080 SkyBlue 87CEEB LightSkyBlue 87CEFA BlueViolet 8A2BE2\n DarkRed 8B0000 DarkMagenta 8B008B SaddleBrown 8B4513 DarkSeaGreen 8FBC8F LightGreen 90EE90\n MediumPurple 9370D8 DarkViolet 9400D3 PaleGreen 98FB98 DarkOrchid 9932CC YellowGreen 9ACD3\n Sienna A0522D Brown A52A2A DarkGray A9A9A9 DarkGrey A9A9A9 LightBlue ADD8E6\n GreenYellow ADFF2F PaleTurquoise AFEEEE LightSteelBlue B0C4DE PowderBlue B0E0E6 FireBrick B22222\n DarkGoldenRod B8860B MediumOrchid BA55D3 RosyBrown BC8F8F DarkKhaki BDB76B Silver C0C0C0\n MediumVioletRed C71585 IndianRed CD5C5C Peru CD853F Chocolate D2691E Tan D2B48C\n LightGray D3D3D3 LightGrey D3D3D3 PaleVioletRed D87093 Thistle D8BFD8 Orchid DA70D6\n GoldenRod DAA520 Crimson DC143C Gainsboro DCDCDC Plum DDA0DD BurlyWood DEB887\n LightCyan E0FFFF Lavender E6E6FA DarkSalmon E9967A Violet EE82EE PaleGoldenRod EEE8AA\n LightCoral F08080 Khaki F0E68C AliceBlue F0F8FF HoneyDew F0FFF0 Azure F0FFFF\n SandyBrown F4A460 Wheat F5DEB3 Beige F5F5DC WhiteSmoke F5F5F5 MintCream F5FFFA\n GhostWhite F8F8FF Salmon FA8072 AntiqueWhite FAEBD7 Linen FAF0E6 LightGoldenRodYellow FAFAD2\n OldLace FDF5E6 Red FF0000 Fuchsia FF00FF Magenta FF00FF DeepPink FF1493\n OrangeRed FF4500 Tomato FF6347 HotPink FF69B4 Coral FF7F50 Darkorange FF8C00\n LightSalmon FFA07A Orange FFA500 LightPink FFB6C1 Pink FFC0CB Gold FFD700\n PeachPuff FFDAB9 NavajoWhite FFDEAD Moccasin FFE4B5 Bisque FFE4C4 MistyRose FFE4E1\n BlanchedAlmond FFEBCD PapayaWhip FFEFD5 LavenderBlush FFF0F5 SeaShell FFF5EE Cornsilk FFF8DC\n LemonChiffon FFFACD FloralWhite FFFAF0 Snow FFFAFA Yellow FFFF00 LightYellow FFFFE0 Ivory FFFFF0\n White FFFFFF\n})\n\n(fn (name) (hash-get $grbn-rgb-map / $name))"
+   }
+}

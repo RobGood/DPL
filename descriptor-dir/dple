@@ -1,0 +1,31 @@
+{
+   "00" : "A placeholder for DPL implementation of DPL Editor.",
+   "_dateCreated" : "Thu Jul 14 01:48:16 2011",
+   "_useCount" : 40,
+   "api-entry-points" : "(hash\n  GET/             list-descriptors\n  GET/~desc-name*  read-descriptor\n POST/~desc-name*  update-descriptor\n)",
+   "api-handlers" : {
+      "list-descriptors" : "(= descriptors (desc-list))\n(reply-json (hash\n  0-n-desc    (list-len $descriptors)\n  1-desc-list $descriptors\n))",
+      "read-descriptor" : "(desc-read desc $req-desc-name)\n(= target (pop $req-path-list))\n(= fields (sort-alpha (grep (fn (_) (string? (hash-get $desc $req-path-list $_)))\n  (hash-keys $desc $req-path-list))))\n\n\n(reply-json (hash\n  0-path-list   $req-path-list\n  1-fields      $fields\n  2-desc        (hash-get  $desc $req-path-list $target)\n))",
+      "update-descriptor" : "(desc-read desc $req-desc-name)\n(= target (pop $req-path-list))\n(= fields (sort-alpha (grep (fn (_) (string? (hash-get $desc $req-path-list $_)))\n  (hash-keys $desc $req-path-list))))\n\n(hash-set $desc $req-path-list $target (desc-from-string $request-content))\n(desc-write $desc $req-desc-name)\n\n(reply-json (hash\n  0-path-list   $req-path-list\n  1-fields      $fields\n  2-desc        (hash-get $desc $req-path-list $target)\n))"
+   },
+   "main" : "(fn ()\n\n)",
+   "on-load" : "(fn ()\n\n)",
+   "rcs-id" : "$Id: dple,v 1.42 2011/10/24 17:31:38 apache Exp apache $",
+   "request-from-client" : {
+      "schema" : {
+         "HTTP" : {
+            "GET" : {
+               ".on-match." : "(hash-eval $self /api-handlers list-descriptors)",
+               "~desc-name*" : {
+                  ".on-match." : "(hash-eval $self /api-handlers read-descriptor)"
+               }
+            },
+            "POST" : {
+               "~desc-name*" : {
+                  ".on-match." : "(hash-eval $self /api-handlers update-descriptor)"
+               }
+            }
+         }
+      }
+   }
+}

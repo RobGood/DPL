@@ -1,0 +1,7 @@
+{
+   "README" : "Reply with the incoming request details.",
+   "_dateCreated" : "Tue Aug 23 23:52:12 2011",
+   "_useCount" : 24,
+   "main" : "(fn (req-info) (reply-json $req-info))",
+   "rcs-id" : "$Id: echo,v 1.16 2013/04/01 16:42:59 apache Exp apache $"
+}

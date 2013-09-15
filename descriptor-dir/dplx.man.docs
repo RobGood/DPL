@@ -1,0 +1,207 @@
+{
+   "_isNew" : 1,
+   "_useCount" : 55,
+   "index" : {
+      "" : "0000-template",
+      "api-entry-points" : 1,
+      "api-handlers" : 2,
+      "dplx" : 17,
+      "main" : 3,
+      "new" : 20,
+      "on-load" : 8,
+      "path-info" : 10,
+      "path-list" : 18,
+      "query-hash" : 11,
+      "rcs-id" : 6,
+      "refer-to" : 7,
+      "remote-addr" : 4,
+      "remote-port" : 16,
+      "request-content" : 15,
+      "request-content-type" : 14,
+      "request-from-client" : 5,
+      "request-method" : 13,
+      "script-name" : 12,
+      "self" : 21,
+      "target-desc" : 19,
+      "user-agent" : 9
+   },
+   "main" : "(fn ()\n  (= did-one 0)\n  (foreach dst-name $path-list\n    (= did-one 1)\n    (desc-read dst \"$dst-name.man.docs\")\n    (hash-set $dst /pages 0000-template (hash-get $self /pages 0000-template))\n    (hash-set $dst /      main          (hash-get $self /      main         )) // ;)\n    (desc-write $dst \"$dst-name.man.docs\"))\n\n  (ct)(bl)\n  (print (if $did-one ok 'nothing happens'))\n)",
+   "pages" : {
+      "0000-template" : {
+         "0-command" : "",
+         "00-Name" : "",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "1" : {
+         "0-command" : "api-entry-points",
+         "00-Name" : "api-entry-points - Webservice definition field",
+         "01-Synopsis" : "(hash\n  GET/        1\n  GET/version version\n)",
+         "02-Description" : "This top-level descriptor field, if present, defines what webservice requests will be accepted.\n<p>\nThe field, when eval'd, should contain a hash with keys\nindicating valid requests to accept and values indicating api-handlers to run.\n</p>\n<p>\nRequests not matching one of the keys will be rejected with a <tt>400 Bad Request</tt> error.\n</p>\n\n<p>\nNote that the HTTP method and path strings are concatenated as the key in this hash. <br/>\nThe value is the name of the field under <tt>api-handlers</tt> that will be eval'd in response.\n</p>",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link dplx:api-handlers dplx:request-from-client)"
+      },
+      "10" : {
+         "0-command" : "path-info",
+         "00-Name" : "path-info - Unpacked request URI",
+         "01-Synopsis" : "",
+         "02-Description" : "This variable is set by dplx to the value of the $PATH_INFO in the CGI environment.\nThis value is further processed into a list of path components stored in <tt>path-list</tt>.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link dplx:dplx dplx:path-list)"
+      },
+      "11" : {
+         "0-command" : "query-hash",
+         "00-Name" : "query-hash - Unpacked query string from request URI",
+         "01-Synopsis" : "",
+         "02-Description" : "This variable is set by dplx and is a hash of urldecoded\nvalues taken from the query string part of the request URI.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link dplx:dplx)"
+      },
+      "12" : {
+         "0-command" : "script-name",
+         "00-Name" : "script-name - Name of cgi handler for this request",
+         "01-Synopsis" : "",
+         "02-Description" : "This variable is set by dplx to value of $SCRIPT_NAME in the CGI environment.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link dplx:dplx)"
+      },
+      "13" : {
+         "0-command" : "request-method",
+         "00-Name" : "request-method - HTTP request method for this request",
+         "01-Synopsis" : "",
+         "02-Description" : "This variable is set by dplx to the value of the HTTP method for the current request.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link dplx:dplx)"
+      },
+      "14" : {
+         "0-command" : "request-content-type",
+         "00-Name" : "request-content-type - MIME type of body in HTTP request",
+         "01-Synopsis" : "",
+         "02-Description" : "This variable is set by dplx to the value of the HTTP header's Content-Type value.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link dplx:dplx)"
+      },
+      "15" : {
+         "0-command" : "request-content",
+         "00-Name" : "request-content - Body of the HTTP request",
+         "01-Synopsis" : "",
+         "02-Description" : "This variable is set by dplx and contains the raw HTTP request body.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link dplx:dplx)"
+      },
+      "16" : {
+         "0-command" : "remote-port",
+         "00-Name" : "remote-port - Remote address of HTTP request",
+         "01-Synopsis" : "(sprintf 'Called from %s:%d (%s)'\n  $remote-addr\n  $remote-port\n  (ip-addr-to-dns-name $remote-addr))",
+         "02-Description" : "This variable is set by dplx to the port of the caller connection.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link dplx:dplx)"
+      },
+      "17" : {
+         "0-command" : "dplx",
+         "00-Name" : "dplx - DPL request dispatcher",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "18" : {
+         "0-command" : "path-list",
+         "00-Name" : "path-list -  Unpacked request URI",
+         "01-Synopsis" : "",
+         "02-Description" : "This variable is set by dplx to a list of request URI path components.\n<br/>\nThese components are not urldecoded and that should be changed!",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link dplx:dplx dplx:path-info)"
+      },
+      "19" : {
+         "0-command" : "target-desc",
+         "00-Name" : "target-desc - Name of current descriptor",
+         "01-Synopsis" : "",
+         "02-Description" : "This variable is set by dplx to the name of the descriptor being run.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link dplx:dplx)"
+      },
+      "2" : {
+         "0-command" : "api-handlers",
+         "00-Name" : "api-handlers - Automatically generated handlers",
+         "01-Synopsis" : "",
+         "02-Description" : "This hash contains fields which are the values in <tt>api-entry-points</tt>.\nA request is mapped to a partiular field which is eval'd.\nAn undefined value means the handling is done, otherwise (main) is called to handle the request.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link dplx:request-from-client dplx:api-entry-points)"
+      },
+      "20" : {
+         "0-command" : "new",
+         "00-Name" : "new - Constructor for DPL classes",
+         "01-Synopsis" : "",
+         "02-Description" : "This top-level descriptor field contains the constructor function called through a call to <tt>(new-inst)</tt>.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link new-inst)"
+      },
+      "21" : {
+         "0-command" : "self",
+         "00-Name" : "self - Variable refering to an instance or descriptor",
+         "01-Synopsis" : "",
+         "02-Description" : "<p>\nFor function calls on functions defined within a descriptor,\nthis variable refers to that descriptor.\n</p>\n\n<p>\nFor method calls, this variable refers to the instance making the method call.\n</p>",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "3" : {
+         "0-command" : "main",
+         "00-Name" : "main - Default DPL program entry point",
+         "01-Synopsis" : "",
+         "02-Description" : "This top-level descriptor function is called by\ndefault if no <tt>api-entry-points</tt> has been defined\n\nThese variables are set to request specifics values:\n(html-ul\n  (html-li user-agent)\n  (html-li path-info)\n  (html-li query-hash)\n  (html-li script-name)\n  (html-li request-method)\n  (html-li request-content-type)\n  (html-li request-content)\n  (html-li remote-addr)\n  (html-li remote-port)\n)",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link\n  dplx:user-agent\n  dplx:path-info\n  dplx:query-hash\n  dplx:script-name\n  dplx:request-method\n  dplx:request-content-type\n  dplx:request-content\n  dplx:remote-addr\n  dplx:remote-port)"
+      },
+      "4" : {
+         "0-command" : "remote-addr",
+         "00-Name" : "remote-addr - Remote address of HTTP request",
+         "01-Synopsis" : "(sprintf 'Called from %s:%d (%s)'\n  $remote-addr\n  $remote-port\n  (ip-addr-to-dns-name $remote-addr))",
+         "02-Description" : "This variable is set by dplx to the name or address of the caller.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link dplx:dplx)"
+      },
+      "5" : {
+         "0-command" : "request-from-client",
+         "00-Name" : "request-from-client - Automatically generated request dispatch tree",
+         "01-Synopsis" : "",
+         "02-Description" : "This hash is an automatically generated request dispatch tree used by dplx.\nIt is generated from the specification in <tt>api-entry-points</tt>.\nTypically the generated code evals a field under <tt>api-handlers</tt>.\n<br/>\nThe field contains expressions that handle the request, and may or may not handle the reply.\n<ul>\n  <li> If value returned is undefined, the reply is assumed to have been sent and the processing can wrap up.,/li>\n  <li> If a defined value is returned, the reply is assumed to be incomplete and (main) is called to hanlde the response. \nHTTP headers may be written by the api handler, but the rest of the header and response body must still be provided.\n </li>\n</ul>",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link dplx:api-handlers dplx:api-entry-points)"
+      },
+      "6" : {
+         "0-command" : "rcs-id",
+         "00-Name" : "rcs-id - RCS Revision id",
+         "01-Synopsis" : "",
+         "02-Description" : "This is an automaically added descriptor field indicating the RCS revision of the descriptor.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link :desc-read :desc-write)"
+      },
+      "7" : {
+         "0-command" : "refer-to",
+         "00-Name" : "refer-to - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "8" : {
+         "0-command" : "on-load",
+         "00-Name" : "on-load - descriptor function called by (desc-read)",
+         "01-Synopsis" : "(desc-read _ HTML-macros)\n\n(hash-get $_ / on-load)",
+         "02-Description" : "This is the top level field in a descriptor that contains a function.\n\nThis function is called by (desc-read).\n\nThis function typically load functions into the runtime environment from their definitions in the current descriptor.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link :desc-read dplx:main)"
+      },
+      "9" : {
+         "0-command" : "user-agent",
+         "00-Name" : "user-agent - User Agent from HTTP request",
+         "01-Synopsis" : "",
+         "02-Description" : "This variable is set by dplx to the HTTP header's User-Agent value.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link dplx:dplx)"
+      }
+   }
+}

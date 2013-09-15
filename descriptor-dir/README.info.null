@@ -1,0 +1,10 @@
+{
+   "README" : "This updates the README.info cache.",
+   "_dateCreated" : "Tue Jun  7 15:51:06 2011",
+   "_useCount" : 25,
+   "info" : "(fn () (hash-get $self / Info))",
+   "main" : "(fn () (reply-json (update)))",
+   "on-load" : "(fn ()\n  (def-hash-fn $self / info)\n  (def-hash-fn $self / update)\n)",
+   "rcs-id" : "$Id: README.info,v 1.43 2012/01/18 21:42:32 apache Exp apache $",
+   "update" : "(fn ()\n  (= out  (hash))\n  (= name $self/name)\n\n  (foreach d-name (desc-list *)\n    (report 'Updating %s for %s...' $name $d-name)\n\n    (catch\n      (do\n        (desc-read d $d-name (hash no-cache 1 no-on-load 1))\n        (if (undef? (= rm (hash-get $d / README)))\n          (= rm (hash-get $d / 00)))\n      \n        (if (string? $rm)\n          (hash-set $out / $d-name (first (split '\\n' $rm)))))))\n\n  (hash-set $self / Info $out)\n\n  (desc-write $self $name)\n\n  $out\n)"
+}

@@ -1,0 +1,77 @@
+{
+   "README" : "This mucks with something to affect authenticated user state.",
+   "_dateCreated" : "Thu Oct 25 02:20:14 2012",
+   "_useCount" : 542,
+   "api" : {
+      "auth" : {
+         "get-auth-token-creds" : "(fn (token -- creds creds-ba)\n  (= creds    (get-creds-from-auth-token $token))\n/*\n  (= creds-ba (get-ba-creds))\n\n  (if (&& (eq . (ith $creds 0)) (eq . (ith $creds 1)))\n    (= creds $creds-ba))\n*/\n  $creds)",
+         "get-ba-creds" : "(fn (reject? -- creds)\n  (if $reject? (set-auth-cookie (get-new-auth-token [. .])))\n\n  (= creds (get-http-basic-credentials (authentication-realm) $reject?))\n  (map-list (fn (_) (hash-get $creds / $_)) [user passwd]))",
+         "get-new-ba-creds" : "(fn () (get-ba-creds (true)))",
+         "set-auth-cookie" : "(fn (token)\n  // (report ' >> (%s %s)' $. $token)\n  (if (defined? $token)\n    (http-set-cookie dpl-auth-token $token {\n      path    /api\n      expires $Token-Exipre-Date\n    })))",
+         "token" : {
+            "get-creds-from-auth-token" : "(def-fn dbg--simulate-session-consistency-failure ( -- fails-until-time time)\n  (= fails-until-time (+ 1365626860))\n  (report 'sim fail dt: %.2fs %d %.2f'\n    (- $fails-until-time (time)) $fails-until-time (time))\n  (if (> $fails-until-time (time)) (do\n    (report 'DEBUG-simulated-failure-until-%d' $fails-until-time)\n    (= s2-id \"DEBUG-simulated-failure-until-${fails-until-time}--${s2-id}\"))))\n\n(fn (token -- data)\n  # (report ' >> (%s. %s)  %s' $. $token (desc-to-string (callstack)))\n  (if (eq '' $token) (return))\n\n  (= data (decrypt-from-cookie $token))\n  # (report-vars data)\n\n  (var-push workspace-name-new $workspace-name)\n  (var-push session-id)\n\n  (= $data)\n\n  (= s2-id $session-id)\n  (= c1-tk (shift $creds))\n\n  (if (defined? $workspace-name-new)\n    (= workspace-name $workspace-name-new))\n\n  (var-pop session-id)\n  (var-pop workspace-name-new)\n\n  # (dbg--simulate-session-consistency-failure)\n  (if (&& (defined? $s2-id) (ne $session-id $s2-id)) (do\n    (report 'Session id consistency test fails \\'%s\\' != \\'%s\\'' $session-id $s2-id)\n    (http-clear-cookie dpl-auth-token)  # avoids a recursive loop\n    (dpl-logout)\n  ))\n\n  (if (defined? $c1-tk)\n    (if (list-len $creds)\n      [$c1-tk @$creds]\n      [$c1-tk])))",
+            "get-new-auth-token" : "(= token-key [\n 'HZD9uSES3d+8ZQE23JmSIuk5ON4Omr8hvcrKNoICprf4uvsp+QYCccZsEMN2/Nma7cVOK96+4DXT\\nqq+QLeG/8J3ISpp2YtOeAQ==\\n',\n 'f/GeiBgrubyRBDhXuLSnQ91YFeo4qo4M3/z8DrJhlIWaisMa2WVmRKAPdfQV0eD8jvBjTena2Bi1\\nms2pANGPlKj+eqsQBuf/NQ==\\n'\n])\n\n(def-fn decrypt-from-cookie (token)\n  (desc-from-string (gunzip (decrypt $token-key (base64-decode (urldecode $token) 1)))))\n\n(def-fn encrypt-for-cookie (data)\n  (urlencode (base64-encode (encrypt $token-key (gzip (desc-to-string $data))) 1)))\n\n------\n(fn (creds -- data)\n  # (report ' >> (%s %s)' $. $creds)\n\n  (if (&& (defined? $creds) (string? $creds)) (= creds [$creds]))\n\n  (= data { time (time) @$[creds session-id workspace-name] })\n  # (report-vars data)\n  (encrypt-for-cookie $data)\n)"
+         }
+      },
+      "dpl-login" : "(def-fn have-credentials? ()\n  (&& (defined&&1? $userid) (defined&&1? $password)))\n\n(def-fn get-next-auth-token (token -- creds)\n  (= creds\n    (if\n      (have-credentials?) [ $userid $password ]\n      (defined? $token)   (get-creds-from-auth-token $token)\n    ))\n\n  (if (defined? $creds) (do\n    (= creds (catch (login @$creds)\n               (dpl-logout)\n               (throw $_err)))))\n\n  (get-new-auth-token $creds $token))\n\n\n(fn (userid password -- token token-old token-new)\n  # (report ' >> (%s %s ***)' $. $userid)\n\n  (catch\n    (if (undef? $cookies) (set-up-cookies-and-session-id))\n    (report ' !! Exception: %s' (desc-to-string $[_err _cs])))\n\n  # (report-vars cookies)\n\n  (= token-new\n    (set-auth-cookie\n      (get-next-auth-token\n        (= token-old\n          (http-get-cookie\n            dpl-auth-token)))))\n\n  (= userid (login))\n  (= auth (authentication-name))\n\n  (if (defined? $userid)\n    (=? workspace-name ''))\n\n  (=? workspace-name '')\n\n  $[token-new token-old auth userid session-id workspace-name])",
+      "dpl-logout" : "(fn ( -- creds token)\n  (if (undef? $cookies) (set-up-cookies-and-session-id))\n\n  (if (defined? (= token (http-get-cookie dpl-auth-token)))\n    (= creds (get-creds-from-auth-token $token)))\n\n  (http-clear-cookie dpl-auth-token)\n\n  (logout @$creds))",
+      "dpl-signup" : "(fn ()\n  // TODO collect userid and passwords,\n  // send them in message to signup worker,\n  // return response.\n\n  (signup-worker-request $query-hash)\n)",
+      "get-workspace-name" : "(fn ()\n  (if (undef? $cookies) (set-up-cookies-and-session-id))\n)",
+      "signup" : {
+         "details" : {
+            "handle-signup-details" : "(fn ( -- userid password1 password2)\n  # is valid input?\n  (= userid (hash-get $msg / userid))\n  (= password1 (hash-get $msg / password1))\n  (= password2 (hash-get $msg / password2))\n\n  (assert 'we have valid input 1'\n    (&& (defined? $userid) (defined? $password1) (defined? $password2)))\n\n  (assert 'we have valid input 2'\n    (&& (ne '' $userid) (ne ''  $password1) (ne ''  $password2)))\n\n  (assert 'passwords must match' (eq $password1 $password2))\n\n  # are able to add non-existing user?\n  (user-add $userid $password1 $password2 {authLevel 1000000})\n\n  # ok then\n  { msg \"userid $userid created\" @$[userid login-msg] data (user-list $userid) }\n)"
+         },
+         "signup-worker-request" : "(fn (msg)\n  (desc-from-string (catch\n    (msg-send\n      dpl-signup-requests\n      (desc-to-string $msg)\n      {timeout 5})\n    (desc-to-string $[_err _cs]))))",
+         "signup-worker-run" : "(def-hash-fn $self details handle-signup-details)\n\n(fn ( -- msg lk n)\n  (report 'Starting DPL signup worker')\n\n  (catch (lock-acquire signup-singleton lk {timeout 3})\n    (report 'process %d can\\'t get singleton lock: %s'\n      $pid (hash-get $_err / msg))\n    (exit 1))\n\n  (= n 0)\n  (while 1\n    (report 'signup worker waiting for request %d...' (++n))\n    (= msg (desc-from-string (msg-receive dpl-signup-requests)))\n    // (report 'Got a request! %s' $msg)\n\n    (= msg (catch (handle-signup-details) $[_err]))\n\n    (msg-reply dpl-signup-requests (desc-to-string $msg))\n  )\n)",
+         "signup-worker-start" : "(fn ()\n  (worker-start $wkr-title N 0  (signup-worker-run))\n)",
+         "signup-worker-status" : "(fn ()\n  (worker-status $wkr-title N 0)\n)",
+         "signup-worker-stop" : "(fn ()\n  (worker-stop $wkr-title N 0)\n)"
+      }
+   },
+   "api-entry-points" : "{\n  GET/           admin\n\n  GET/login      login\n POST/login      login\n  GET/login-dbg  login-dbg\n\n  GET/logout     logout\n\n  GET/signup     signup\n POST/signup     signup\n}",
+   "api-handlers" : {
+      "admin" : "(= cookies (http-cookies))\n(reply-json $[cookies userid workspace-name])",
+      "login" : "(= $query-hash)\n(dpl-logout)\n\n(= auth-module-names [DPL Primal ActiveDirectory])\n\n(= workspace-name ~)\n\n(if (defined&&1? $userid) (do\n  (= result (catch (do\n              (bi-import \"Authentication_${auth-module-name}!\")\n              (dpl-login $userid $password))\n              $_err))\n\n  (if (defined? (hash-get $result / userid))\n    (return (redirect-to (sprintf http://%s/api/dple $host))))\n\n  (= login-error (concat '<font color=\"red\">' $result </font>))\n))\n\n\n(= login-message (concat\n 'If you have a DPL userid, or other credentials, log in here.'\n))\n\n(= signup-message (concat\n  'Otherwise, ' (html-link /api/dplx/user/signup 'sign up for a DPL userid') '. '\n  'Then '  (html-link /api/dplx/dpl-getting-started 'get started')\n))\n\n(= app-title 'DPL Login')\n\n\n(def-fn html-auth-selection-radio-tr (name)\n  (concat\n    <tr>\n     '<td align=\"right\">' </td>\n      <td> (sprintf\n          '<input type=\"radio\" name=\"auth-module-name\" value=\"%s\"%s/>'\n          $name (if (eq $name $auth-module-name) ' checked=\"checked\"' ''))\n          (bi-import \"Authentication_$name\" (authentication-realm))\n      </td>\n    </tr>))\n\n(= auth-module-name DPL)\n\n(reply-html \n  (html-app-template\n    (html-h 3 $app-title)\n\n    (html-p\n      '<form method=\"POST\" action=\"/api/dplx/user/login\">'\n      '<table border='0' align='left' cellspacing='0' cellpadding='2'>'\n        <tr>'<td colspan=\"2\">' $login-message </td></tr>\n        <tr>'<td colspan=\"2\">' $signup-message </td></tr>\n        <tr>'<td colspan=\"2\">'  </td></tr>\n\n        <tr>'<td colspan=\"2\">' 'Choose which credentials to use...' </td></tr>\n        (map-list html-auth-selection-radio-tr $auth-module-names)\n\n        <tr>'<td align=\"right\">' userid: </td><td> '<input type=\"text\" name=\"userid\" value=\"\"/>' </td></tr>\n        <tr>'<td align=\"right\">' password: </td><td> '<input type=\"password\" name=\"password\" value=\"\"/>' </td></tr>\n\n        <tr> '<td>' '<input type=\"submit\" value=\"Login\"/>' </td>\n              <td> (if (defined? $login-error) $login-error) </td>\n        </tr>\n      </table>\n      </form>\n    )\n  )\n)",
+      "login-dbg" : "(reply-json (dpl-login))",
+      "logout" : "(dpl-logout)\n(redirect-to (sprintf http://%s/api/dplx/user/login $host))))",
+      "signup" : "(= $query-hash)\n(dpl-logout)\n\n(= app-title 'DPL Signup')\n\n(reply-html\n  (html-app-template\n    (html-h 3 $app-title)\n\n    (html-p\n      '<form method=\"POST\" action=\"/api/dplx/user/signup\">'\n      '<table border='0' align='left' cellspacing='0' cellpadding='2'>'\n         <tr>'<td colspan=\"2\">'\n           'Create your DPL userid here. Then '\n            (html-link /api/dplx/dpl-getting-started 'get started')\n         </td></tr>\n\n        <tr><td> userid: </td><td> '<input type=\"text\" name=\"userid\" value=\"\"/>' </td></tr>\n        <tr><td> password1: </td><td> '<input type=\"password\" name=\"password1\" value=\"\"/>' </td></tr>\n        <tr><td></td> '<td align=\"center\">' <i> 'passwords must match' </i> </td></tr>\n        <tr><td> password2: </td><td> '<input type=\"password\" name=\"password2\" value=\"\"/>' </td></tr>\n        <tr> '<td colspan=\"2\">' '<input type=\"submit\" value=\"Make me!\"/>' </td></tr>\n      </table>\n      </form>\n    )\n\n    (if (defined&&1? $userid) (do\n      (= result (dpl-signup))\n\n      (if (defined? (hash-get $result / userid)) (do\n        (= result (dpl-login $userid $password1))\n        (return (redirect-to (sprintf http://%s/api/dplx/dpl-getting-started $host)))))\n\n      (html-pre (desc-to-string $result))\n    ))\n  )\n)"
+   },
+   "main" : "(fn ())",
+   "on-load" : "(fn ()\n  (= app-title 'DPL User services')\n\n  (bi-import Authentication_DPL!)\n  (desc-read _ HTML-macros)\n\n  (def-hash-fn $self {\n    /api [\n      dpl-login\n      dpl-logout\n      dpl-signup\n      get-workspace-name\n    ]\n\n    /api/signup [\n      signup-worker-start\n      signup-worker-stop\n      signup-worker-status\n      signup-worker-run\n      signup-worker-request\n    ]\n\n    /api/auth [\n      get-auth-token-creds\n      get-ba-creds\n      get-new-ba-creds\n      set-auth-cookie\n    ]\n\n    /api/auth/token [\n      get-creds-from-auth-token\n      get-new-auth-token\n    ]\n  })\n\n  (= wkr-title signup-worker)\n\n  (= default-workspace-name workspace)\n\n  (= Token-Exipre-Date 'Sat, 21-Dec-2013 00:00:00')\n)",
+   "rcs-id" : "$Id: user,v 1.561 2013/04/15 17:29:15 apache Exp apache $",
+   "request-from-client" : {
+      "schema" : {
+         "HTTP" : {
+            "GET" : {
+               ".on-match." : "(hash-eval $self /api-handlers admin)",
+               "in" : {
+                  ".on-match." : "(hash-eval $self /api-handlers in)"
+               },
+               "login" : {
+                  ".on-match." : "(hash-eval $self /api-handlers login)"
+               },
+               "login-dbg" : {
+                  ".on-match." : "(hash-eval $self /api-handlers login-dbg)"
+               },
+               "logout" : {
+                  ".on-match." : "(hash-eval $self /api-handlers logout)"
+               },
+               "out" : {
+                  ".on-match." : "(hash-eval $self /api-handlers out)"
+               },
+               "signup" : {
+                  ".on-match." : "(hash-eval $self /api-handlers signup)"
+               }
+            },
+            "POST" : {
+               "login" : {
+                  ".on-match." : "(hash-eval $self /api-handlers login)"
+               },
+               "signup" : {
+                  ".on-match." : "(hash-eval $self /api-handlers signup)"
+               }
+            }
+         }
+      }
+   }
+}

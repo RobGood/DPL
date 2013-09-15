@@ -1,0 +1,7 @@
+{
+   "README" : "This endpoint returns various gps variables stored under 'incl'",
+   "_dateCreated" : "Tue Jan 17 18:01:41 2012",
+   "_useCount" : 114,
+   "main" : "(fn ()\n  (ct $\"<incl${path-info}.type>\")\n  (bl)\n  (emit $\"<incl${path-info}>\"))",
+   "rcs-id" : "$Id: incl,v 1.118 2013/04/18 19:17:22 apache Exp apache $"
+}

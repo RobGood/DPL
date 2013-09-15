@@ -1,0 +1,26 @@
+{
+   "_isNew" : 1,
+   "index" : {
+      "" : "0-command",
+      "dpld" : 1
+   },
+   "main" : "(fn ()\n  (= did-one 0)\n  (foreach dst-name $path-list\n    (= did-one 1)\n    (desc-read dst \"$dst-name.man.docs\")\n    (hash-set $dst /pages 0000-template (hash-get $self /pages 0000-template))\n    (hash-set $dst /      main          (hash-get $self /      main         )) // ;)\n    (desc-write $dst \"$dst-name.man.docs\"))\n\n  (ct)(bl)\n  (print (if $did-one ok 'nothing happens'))\n)",
+   "pages" : {
+      "0000-template" : {
+         "0-command" : "",
+         "00-Name" : "",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "1" : {
+         "0-command" : "dpld",
+         "00-Name" : "dpld - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      }
+   }
+}

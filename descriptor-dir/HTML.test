@@ -1,0 +1,36 @@
+{
+   "00-Intro.html" : "<h2>Intro</h2><a href='http://localhost'><b>Hello world!! at Mon Oct 25 16:30:48 2010.</b></a>",
+   "00-Intro.html.pfl" : "(concat\n(html-h 2 Intro)\n(html-link \n   http://localhost\n   (html-bold (sprintf \"Hello world!! at %s.\" (date))))\n)",
+   "_dateCreated" : "Tue Aug 17 12:51:04 2010",
+   "_useCount" : 454,
+   "action-run" : "(fn (name)\n  (eprint 'Generating pages...\\n')\n  (generate-html $self / 00-Intro)\n  (eprint 'Done.\\n'))",
+   "generate-html" : "(fn (desc path name)\n  (if (eq $path '') (set-var path /))\n\n  // Generate .html from .html.pfl\n  (desc-set     $desc $path \"$name.html\"\n     (desc-eval $desc $path \"$name.html.pfl\"))\n\n  (desc-write $desc $action-name))",
+   "macros" : {
+      "html--wrapper" : "(fn (tag body attrs)\n  (if (&& (is-undef $body) (is-defined $attrs))\n    (do (= body $attrs) (var-clear attrs)))\n\n  (if (is-undef $attrs)\n    (return (if (is-undef $body)\n      \"<$tag/>\"\n      (sprintf \"<$tag>%s</$tag>\" $body))))\n\n  (= attrs\n    (if (is-defined $attrs)\n      (join ' ' (map-list (fn (_)\n          (sprintf '%s=\"%s\"' $_ (xmlencode (hash-get $attrs / $_))))\n        (hash-keys $attrs /)))\n      ''))\n\n  (if (is-undef $body)\n      (sprintf '<%s %s/>' $tag $attrs)\n      (sprintf '<%s %s>%s</%s>' $tag $attrs $body $tag)\n  )\n)",
+      "html-b" : "(fn (body) (html--wrapper b $body))",
+      "html-body" : "(fn (attrs body) (html--wrapper body $body $attrs))",
+      "html-bold" : "(fn (body) (html--wrapper b $body))",
+      "html-br" : "(fn () (html--wrapper br))",
+      "html-form" : "(fn (method action body) \n  (sprintf '<form method=\"%s\" action=\"%s\">%s</form>'\n    $method $action $body))",
+      "html-h" : "(fn (n body)  (html--wrapper \"h$n\" $body))",
+      "html-head" : "(fn (body) (html--wrapper head $body))",
+      "html-html" : "(fn (body) (html--wrapper html $body))",
+      "html-i" : "(fn (body) (html--wrapper i $body))",
+      "html-img" : "(fn (url width border map)\n   (concat \n   \"<img src='$url'\"\n   (if (ne $width  '') \"   width='$width'\")\n   (if (ne $border '') \" border='$border'\")\n   (if (ne $map    '') \" usemap='#$map'\")\n   \"/>\"))",
+      "html-input" : "(fn (type name value) \"<input type='$type' name='$name' value='$value'/>\")",
+      "html-li" : "(fn (body) (html--wrapper li $body))",
+      "html-link" : "(fn (url label) \n  (if (is-undef $label) (= label $url))\n  \"<a href='$url'>$label</a>\")",
+      "html-ol" : "(fn (body) (html--wrapper ol $body))",
+      "html-p" : "(fn (body) (html--wrapper p $body))",
+      "html-pre" : "(fn (body) (html--wrapper pre $body))",
+      "html-textarea" : "(fn (type name rows cols body)\n  \"<textarea type='$type' name='$name' rows='$rows' cols='$cols'>$body</textarea>\")",
+      "html-title" : "(fn (body) (html--wrapper title $body))",
+      "html-tt" : "(fn (body) (html--wrapper tt $body))",
+      "html-ul" : "(fn (body) (html--wrapper ul $body))"
+   },
+   "misc" : {
+      "bracket-link" : "(fn (link) (concat (html-b '[&nbsp;') $link (html-b '&nbsp;]')))"
+   },
+   "on-load" : "(fn ()\n   (def-desc-fn $self / generate-html)\n\n   (def-desc-fn $self /macros html--wrapper)\n   (def-desc-fn $self /macros html-ul)\n   (def-desc-fn $self /macros html-ol)\n   (def-desc-fn $self /macros html-li)\n   (def-desc-fn $self /macros html-bold)\n   (def-desc-fn $self /macros html-h)\n   (def-desc-fn $self /macros html-i)\n   (def-desc-fn $self /macros html-img)\n   (def-desc-fn $self /macros html-form)\n   (def-desc-fn $self /macros html-input)\n   (def-desc-fn $self /macros html-textarea)\n   (def-desc-fn $self /macros html-tt)\n   (def-desc-fn $self /macros html-link)\n   (def-desc-fn $self /macros html-p)\n   (def-desc-fn $self /macros html-pre)\n   (def-desc-fn $self /macros html-b)\n   (def-desc-fn $self /macros html-br)\n   (def-desc-fn $self /macros html-html)\n   (def-desc-fn $self /macros html-head)\n   (def-desc-fn $self /macros html-title)\n   (def-desc-fn $self /macros html-body)\n\n   (def-desc-fn $self /misc bracket-link)\n\n)",
+   "rcs-id" : "$Id: HTML.test,v 1.50 2011/04/01 06:26:21 apache Exp apache $"
+}

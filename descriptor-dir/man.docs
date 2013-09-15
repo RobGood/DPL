@@ -1,0 +1,2583 @@
+{
+   "_dateCreated" : "Thu Jul 14 12:35:21 2011",
+   "_useCount" : 763,
+   "index" : {
+      "" : "0000-template",
+      "!" : "46",
+      "!=" : "228",
+      "%" : "176",
+      "&" : "212",
+      "&&" : "49",
+      "*" : "100",
+      "**" : "94",
+      "+" : "178",
+      "++_" : "148",
+      "-" : "39",
+      "--_" : "31",
+      "->" : "213",
+      ".." : "237",
+      "/" : "249",
+      "0-lock-acquire" : "186",
+      "0-lock-release" : "234",
+      "<" : "195",
+      "<<" : "193",
+      "<=" : "81",
+      "<=>" : "121",
+      "=" : "68",
+      "==" : "25",
+      "=?" : "292",
+      "=~" : "33",
+      ">" : "205",
+      ">=" : "24",
+      ">>" : "116",
+      "_++" : "74",
+      "_--" : "166",
+      "_err" : "273",
+      "abs" : "153",
+      "apply" : "220",
+      "assert" : "293",
+      "async-deref-url" : "118",
+      "async-end" : "115",
+      "async-read" : "20",
+      "async-select" : "136",
+      "atomic" : "287",
+      "base64-decode" : "44",
+      "base64-encode" : "101",
+      "bi-drop" : "149",
+      "bi-import" : "194",
+      "builtins" : "62",
+      "callstack" : 0,
+      "catch" : "268",
+      "clear-var" : "106",
+      "cmp" : "241",
+      "concat" : "53",
+      "cos" : "221",
+      "date" : "1",
+      "date-to-time" : "16",
+      "dbi-connect" : "211",
+      "dbi-db" : "240",
+      "dbi-disconnect" : "12",
+      "dbi-prepare" : "47",
+      "dbi-quote" : "247",
+      "dbi-st" : "188",
+      "dbi-st-list" : "181",
+      "dbm-atomic" : "294",
+      "dbm-close" : "72",
+      "dbm-open" : "119",
+      "debug" : "76",
+      "decode-charset" : "201",
+      "decode-utf8" : "244",
+      "def-desc-fn" : "200",
+      "def-fn" : "190",
+      "def-hash-fn" : "122",
+      "def-macro" : "124",
+      "defined" : "289",
+      "defined&&0?" : "134",
+      "defined&&1?" : "7",
+      "defined?" : "143",
+      "deref-url" : "222",
+      "desc-eval" : "75",
+      "desc-from-string" : "88",
+      "desc-get" : "32",
+      "desc-keys" : "158",
+      "desc-list" : "236",
+      "desc-read" : "239",
+      "desc-rlog" : "105",
+      "desc-rlog-diff-rec" : "55",
+      "desc-set" : "96",
+      "desc-to-string" : "65",
+      "desc-write" : "59",
+      "do" : "163",
+      "dpld" : "277",
+      "dple" : "276",
+      "dpli" : "278",
+      "dplx" : "275",
+      "drop-builtins" : "202",
+      "dump-vars" : "87",
+      "emit" : "15",
+      "emitf" : "141",
+      "encode-charset" : "164",
+      "encode-utf8" : "180",
+      "env" : "174",
+      "eprint" : "45",
+      "eprintf" : "167",
+      "eprintln" : "23",
+      "eq" : "137",
+      "eval" : "229",
+      "eval-all" : "187",
+      "exit" : "69",
+      "exp" : "79",
+      "expr" : "223",
+      "expr-to-list" : "269",
+      "false" : "250",
+      "first" : "232",
+      "fn" : "270",
+      "fn-encap" : "286",
+      "foreach" : "102",
+      "ge" : "34",
+      "get" : "110",
+      "get-DPL-dist" : "135",
+      "get-var" : "177",
+      "go" : "120",
+      "grep" : "73",
+      "gt" : "58",
+      "gunzip" : "35",
+      "gzip" : "196",
+      "hash" : "29",
+      "hash-clear" : "245",
+      "hash-each" : "146",
+      "hash-eval" : "248",
+      "hash-get" : "8",
+      "hash-keys" : "11",
+      "hash-move" : "282",
+      "hash-n-keys" : "113",
+      "hash-paths" : "157",
+      "hash-rename" : "283",
+      "hash-set" : "63",
+      "hash-set-init" : "132",
+      "hash-values" : "127",
+      "hash?" : "182",
+      "help" : "3",
+      "hex-decode" : "251",
+      "hex-encode" : "252",
+      "hostname" : "130",
+      "html-tidy" : "133",
+      "http-headers" : "207",
+      "if" : "266",
+      "ii-eval" : "89",
+      "ii-new" : "170",
+      "init-interpreter" : "109",
+      "int" : "160",
+      "ip-addr-to-dns-name" : "284",
+      "is-defined" : "131",
+      "is-hash" : "84",
+      "is-list" : "52",
+      "is-string" : "14",
+      "is-sym" : "18",
+      "is-undef" : "154",
+      "ith" : "92",
+      "join" : "152",
+      "last" : "51",
+      "lc" : "126",
+      "lcfirst" : "140",
+      "le" : "10",
+      "len" : "214",
+      "list" : "138",
+      "list-diff" : "114",
+      "list-len" : "22",
+      "list-merge" : "279",
+      "list-reduce" : "56",
+      "list?" : "185",
+      "lock-acquire" : "43",
+      "lock-release" : "86",
+      "log" : "226",
+      "lt" : "210",
+      "macro?" : "253",
+      "map-hash" : "219",
+      "map-list" : "67",
+      "max" : "189",
+      "md5-digest" : "83",
+      "mime-parse" : "175",
+      "min" : "235",
+      "msg-asend" : "27",
+      "msg-init" : "107",
+      "msg-receive" : "150",
+      "msg-reply" : "243",
+      "msg-select" : "125",
+      "msg-send" : "147",
+      "namespace" : "172",
+      "ne" : "4",
+      "new" : "263",
+      "new-inst" : "61",
+      "next" : "64",
+      "null" : "254",
+      "oi-trap" : "97",
+      "on-load" : "261",
+      "oncomma" : "255",
+      "parse" : "162",
+      "perl-eval" : "192",
+      "pm-call" : "38",
+      "pm-call-list" : "37",
+      "pm-new" : "82",
+      "pop" : "184",
+      "pop-var" : "199",
+      "pp-set" : "60",
+      "print" : "13",
+      "print-banner" : "85",
+      "printf" : "108",
+      "println" : "17",
+      "push" : "91",
+      "push-var" : "80",
+      "rand" : "233",
+      "rand-guid" : "280",
+      "rand-word" : "123",
+      "rcs-rev" : "112",
+      "rcs-vers" : "224",
+      "repeat" : "156",
+      "repl" : "19",
+      "report" : "209",
+      "report-vars" : "291",
+      "rest" : "36",
+      "return" : "238",
+      "reverse" : "208",
+      "search-code" : "204",
+      "set-var" : "171",
+      "sha-digest" : "225",
+      "sha256-digest" : "173",
+      "shift" : "93",
+      "shuffle-list" : "139",
+      "sin" : "90",
+      "sleep" : "246",
+      "sort-alpha" : "77",
+      "sort-num" : "169",
+      "sort-pred" : "218",
+      "sort-rlog" : "179",
+      "sort-tt" : "129",
+      "split" : "78",
+      "sprintf" : "227",
+      "sqrt" : "6",
+      "srand" : "198",
+      "start-worker" : "290",
+      "statistics" : "9",
+      "string?" : "98",
+      "substr" : "70",
+      "sym-from-string" : "66",
+      "sym-list" : "197",
+      "sym-to-string" : "5",
+      "sym?" : "57",
+      "sys-fork" : "203",
+      "sys-getpid" : "111",
+      "sys-wait" : "217",
+      "tan" : "95",
+      "throw" : "48",
+      "time" : "2",
+      "time-to-date" : "216",
+      "trim" : "26",
+      "true" : "256",
+      "twurler" : "104",
+      "uc" : "42",
+      "ucfirst" : "183",
+      "undef" : "288",
+      "undef?" : "21",
+      "unshift" : "41",
+      "update-DPL-dist" : "99",
+      "urldecode" : "151",
+      "urlencode" : "128",
+      "utf8-decode" : "30",
+      "utf8-encode" : "155",
+      "var-capture" : "161",
+      "var-clear" : "191",
+      "var-dump" : "159",
+      "var-get" : "103",
+      "var-pop" : "230",
+      "var-push" : "142",
+      "var-restore" : "242",
+      "var-set" : "117",
+      "version" : "50",
+      "while" : "267",
+      "x" : "215",
+      "xmldecode" : "54",
+      "xmlencode" : "71",
+      "zonk" : "40",
+      "|" : "145",
+      "||" : "144",
+      "~" : "165",
+      "×" : "28",
+      "λ" : "272",
+      "π" : "231",
+      "τ" : "206"
+   },
+   "main" : "(fn ()\n  (= did-one 0)\n  (foreach dst-name $path-list\n    (= did-one 1)\n    (desc-read dst \"$dst-name.man.docs\")\n    (hash-set $dst /pages 0000-template (hash-get $self /pages 0000-template))\n    (hash-set $dst /      main          (hash-get $self /      main         )) // ;)\n    (desc-write $dst \"$dst-name.man.docs\"))\n\n  (ct)(bl)\n  (print (if $did-one ok 'nothing happens'))\n)",
+   "pages" : {
+      "0" : {
+         "0-command" : "callstack",
+         "00-Name" : "callstack - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "0-command" : {
+         "0-command" : "!",
+         "00-Name" : "! - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "0000-template" : {
+         "0-command" : "",
+         "00-Name" : "",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "1" : {
+         "0-command" : "date",
+         "00-Name" : "date - return a readable date.",
+         "01-Synopsis" : "(hash\n  1 (date)\n  2 (date utc)\n)",
+         "02-Description" : "Returns the system time, formated in a readable way.\n<br/>\nThe above expressions evaluate to strings like:\n<pre>\n  Date: Tue Aug 16 01:09:57 2011\n  Date: Tue Aug 16 05:09:57 2011 UTC\n</pre>",
+         "03-Options" : "Probably.",
+         "035-Limitations" : "No general timezone can be specified.\nLocal timezone and UTC assumed sufficient.",
+         "04-See-Also" : "(man-link time)"
+      },
+      "10" : {
+         "0-command" : "le",
+         "00-Name" : "le - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "100" : {
+         "0-command" : "*",
+         "00-Name" : "* - Multiply.",
+         "01-Synopsis" : "(* 1 2 3 4 5 6 7 8 9 10)",
+         "02-Description" : "This function returns the product of its arguments, and\nis an alias for ×, the traditional name for this function.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link + - * / × ÷)"
+      },
+      "101" : {
+         "0-command" : "base64-encode",
+         "00-Name" : "base64-encode - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "102" : {
+         "0-command" : "foreach",
+         "00-Name" : "foreach - Iterate over a list of items",
+         "01-Synopsis" : "(foreach i (.. 1 10) (* $i $i))",
+         "02-Description" : "This macro iterates over a list of items and returns a list of per-item evaluation results.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link map-list)"
+      },
+      "103" : {
+         "0-command" : "var-get",
+         "00-Name" : "var-get - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "104" : {
+         "0-command" : "twurler",
+         "00-Name" : "twurler -",
+         "01-Synopsis" : "dpl -eval '(twurler 20)'",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "105" : {
+         "0-command" : "desc-rlog",
+         "00-Name" : "desc-rlog - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "106" : {
+         "0-command" : "clear-var",
+         "00-Name" : "clear-var - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "107" : {
+         "0-command" : "msg-init",
+         "00-Name" : "msg-init - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "108" : {
+         "0-command" : "printf",
+         "00-Name" : "printf - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "109" : {
+         "0-command" : "init-interpreter",
+         "00-Name" : "init-interpreter - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "11" : {
+         "0-command" : "hash-keys",
+         "00-Name" : "hash-keys -",
+         "01-Synopsis" : "(= desc (hash\n  foo 42\n  bar (hash\n    baz 420\n    quux  (hash\n      fnord! 42000\n    )\n  )\n))\n\n(= out (hash))\n\n(map-list (fn (path)\n    (hash-set $out $path 0-names (hash-keys $desc $path)))\n  (hash-paths $desc))\n\n$out",
+         "02-Description" : "This function returns a list of field names in a particular hash within a nested hash.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link hash-get hash-set hash-clear hash-paths)"
+      },
+      "110" : {
+         "0-command" : "get",
+         "00-Name" : "get - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "111" : {
+         "0-command" : "sys-getpid",
+         "00-Name" : "sys-getpid - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "112" : {
+         "0-command" : "rcs-rev",
+         "00-Name" : "rcs-rev - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "113" : {
+         "0-command" : "hash-n-keys",
+         "00-Name" : "hash-n-keys - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "114" : {
+         "0-command" : "list-diff",
+         "00-Name" : "list-diff - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "115" : {
+         "0-command" : "async-end",
+         "00-Name" : "async-end - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "116" : {
+         "0-command" : ">>",
+         "00-Name" : ">> - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "117" : {
+         "0-command" : "var-set",
+         "00-Name" : "var-set - assign a value to a variable",
+         "01-Synopsis" : "(var-set foo (* 6 7))\n\n$foo",
+         "02-Description" : "This function exists for naming consistency, but is typically used through its <tt>=</tt> alias.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link = var-get var-clear)"
+      },
+      "118" : {
+         "0-command" : "async-deref-url",
+         "00-Name" : "async-deref-url - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "119" : {
+         "0-command" : "dbm-open",
+         "00-Name" : "dbm-open - connect to a persistant (flat) hash via Berkeley DB.",
+         "01-Synopsis" : "(= val (version))\n\n(= dbm (dbm-open sample {mode rw}))\n(hash-set $dbm / vers (desc-to-string $val))\n(dbm-close sample)\n\n(= dbm2 (dbm-open sample {mode r}))\n(= res (desc-from-string (hash-get $dbm2 / vers)))\n(dbm-close sample2)\n\n$res",
+         "02-Description" : "",
+         "03-Options" : "(html-pre <<FINI\n(hash\n  mode  rw  // update  (default)\n  mode  r   // read-only\n)\nFINI)",
+         "04-See-Also" : "(man-link dbm-close)"
+      },
+      "12" : {
+         "0-command" : "dbi-disconnect",
+         "00-Name" : "dbi-disconnect - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "120" : {
+         "0-command" : "go",
+         "00-Name" : "go - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "121" : {
+         "0-command" : "<=>",
+         "00-Name" : "<=> - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "122" : {
+         "0-command" : "def-hash-fn",
+         "00-Name" : "def-hash-fn - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "123" : {
+         "0-command" : "rand-word",
+         "00-Name" : "rand-word -",
+         "01-Synopsis" : "(rand-word)",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "124" : {
+         "0-command" : "def-macro",
+         "00-Name" : "def-macro - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "125" : {
+         "0-command" : "msg-select",
+         "00-Name" : "msg-select - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "126" : {
+         "0-command" : "lc",
+         "00-Name" : "lc - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "127" : {
+         "0-command" : "hash-values",
+         "00-Name" : "hash-values - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "128" : {
+         "0-command" : "urlencode",
+         "00-Name" : "urlencode - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "129" : {
+         "0-command" : "sort-tt",
+         "00-Name" : "sort-tt - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "13" : {
+         "0-command" : "print",
+         "00-Name" : "print - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "130" : {
+         "0-command" : "hostname",
+         "00-Name" : "hostname - Return this host's name",
+         "01-Synopsis" : "(hostname)",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "131" : {
+         "0-command" : "is-defined",
+         "00-Name" : "is-defined - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "132" : {
+         "0-command" : "hash-set-init",
+         "00-Name" : "hash-set-init - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "133" : {
+         "0-command" : "html-tidy",
+         "00-Name" : "html-tidy - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "134" : {
+         "0-command" : "defined&&0?",
+         "00-Name" : "defined&&0? - Defined but false predicate",
+         "01-Synopsis" : "(= val-0 ())\n(= val-1 '')\n(= val-2  0)\n(= val-3  1)\n\n(hash\n  0-false (defined&&0? $val-0)\n  1-true  (defined&&0? $val-1)\n  2-true  (defined&&0? $val-2)\n  3-false (defined&&0? $val-3)\n)",
+         "02-Description" : "This predicate returns true only if the argument is defined and false.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link defined&&1?)"
+      },
+      "135" : {
+         "0-command" : "get-DPL-dist",
+         "00-Name" : "get-DPL-dist - Generate and return an distribtion file from the current DPL installation.",
+         "01-Synopsis" : "(hash\n  1 (len (get-DPL-dist))\n  2 (len (get-DPL-dist tar.gz))\n  3 (len (get-DPL-dist zip))\n  4 (catch\n      (len (get-DPL-dist xyz))\n      $_err)\n)",
+         "02-Description" : "This function returns a tar.gz or zip file containing a copy of the current DPL installation.",
+         "03-Options" : "(html-ul\n  (html-li  '<tt>tar.gz</tt> -- return gzip\\'d tar file.')\n  (html-li  '<tt>zip</tt> -- return zip file.')\n)",
+         "04-See-Also" : "(man-link update-DPL-dist)"
+      },
+      "136" : {
+         "0-command" : "async-select",
+         "00-Name" : "async-select - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "137" : {
+         "0-command" : "eq",
+         "00-Name" : "eq - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "138" : {
+         "0-command" : "list",
+         "00-Name" : "list - Return a list initialized with given items",
+         "01-Synopsis" : "[(list 10 9 8 7 6 5 4 3 2 1 0)\n[10 9 8 7 6 5 4 3 2 1 0]]",
+         "02-Description" : "This function returns a list containing its given arguments.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link hash list?)"
+      },
+      "139" : {
+         "0-command" : "shuffle-list",
+         "00-Name" : "shuffle-list - Randomize a list",
+         "01-Synopsis" : "(shuffle-list (.. 1 10))",
+         "02-Description" : "This function takes a list and returns a list with the input list's elements in a random order.",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "14" : {
+         "0-command" : "is-string",
+         "00-Name" : "is-string - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "140" : {
+         "0-command" : "lcfirst",
+         "00-Name" : "lcfirst - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "141" : {
+         "0-command" : "emitf",
+         "00-Name" : "emitf - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "142" : {
+         "0-command" : "var-push",
+         "00-Name" : "var-push - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "143" : {
+         "0-command" : "defined?",
+         "00-Name" : "defined? - Predicate true if argument is defined",
+         "01-Synopsis" : "(hash\n  1 (defined? (hash 1 2 3 4))\n  2 (defined? (list 1 2 3 4))\n  3 (defined? \"1 2 3 4\")\n\n  4 (defined? ())\n  5 (defined? (null))\n)",
+         "02-Description" : "This function returns true if the given argument has a defined value.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link list? string? hash? undef? sym?)"
+      },
+      "144" : {
+         "0-command" : "||",
+         "00-Name" : "|| - early out Boolean OR",
+         "01-Synopsis" : "(html-pre <<FINI\n  (|| -pred-1- -pred-2- -pred-3- ...)\nFINI)",
+         "02-Description" : "Evaluates its args, left to right, one at a time, until an evaluation returns <i>true</i>, then <tt>1</tt> is returned. <br/>\nOtherwise <tt>0</tt> is returned. <br/>\nReturns <tt>0</tt> if all its args are false, <tt>1</tt> otherwise.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link && !)"
+      },
+      "145" : {
+         "0-command" : "|",
+         "00-Name" : "| - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "146" : {
+         "0-command" : "hash-each",
+         "00-Name" : "hash-each - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "147" : {
+         "0-command" : "msg-send",
+         "00-Name" : "msg-send - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "148" : {
+         "0-command" : "++_",
+         "00-Name" : "++_ - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "149" : {
+         "0-command" : "bi-drop",
+         "00-Name" : "bi-drop - Delete named builtins functions from the runtime environment",
+         "01-Synopsis" : "(bi-drop date)\n(date)",
+         "02-Description" : "This function is used to remove specific builtin functions from the runtime environment,\nand prevents any future redefinitions via <tt>(bi-import)</tt>.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link bi-import)"
+      },
+      "15" : {
+         "0-command" : "emit",
+         "00-Name" : "emit - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "150" : {
+         "0-command" : "msg-receive",
+         "00-Name" : "msg-receive - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "151" : {
+         "0-command" : "urldecode",
+         "00-Name" : "urldecode - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "152" : {
+         "0-command" : "join",
+         "00-Name" : "join - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "153" : {
+         "0-command" : "abs",
+         "00-Name" : "abs - Absolute value",
+         "01-Synopsis" : "(list (abs -3.123) (abs -1) (abs 0) (abs +1) (abs 3.234))",
+         "02-Description" : "This function returns the absolute value of its argument.",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "154" : {
+         "0-command" : "is-undef",
+         "00-Name" : "is-undef - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "155" : {
+         "0-command" : "utf8-encode",
+         "00-Name" : "utf8-encode - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "156" : {
+         "0-command" : "repeat",
+         "00-Name" : "repeat - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "157" : {
+         "0-command" : "hash-paths",
+         "00-Name" : "hash-paths - return list of paths in a nested hash",
+         "01-Synopsis" : "(= desc (hash\n  foo 42\n  bar (hash\n    baz 420\n    quux  (hash\n      fnord! 42000\n    )\n  )\n))\n\n(def-fn callback-fn (path)\n  (report 'path: %s' $path)\n  \"$path -- $path\")\n\n(hash\n  1 (hash-paths $desc)\n  2 (hash-paths $desc callback-fn)\n)",
+         "02-Description" : "This function returns a list of paths within a nested hash.\n<br/>\nCallback usage not yet supported :(",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link hash-get hash-set hash-clear hash-keys)"
+      },
+      "158" : {
+         "0-command" : "desc-keys",
+         "00-Name" : "desc-keys - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "159" : {
+         "0-command" : "var-dump",
+         "00-Name" : "var-dump - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "16" : {
+         "0-command" : "date-to-time",
+         "00-Name" : "date-to-time -",
+         "01-Synopsis" : "//(= d1  2011-01-02T12:34:56Z)\n  (= d1  'march 2, 2011')\n\n(= t (date-to-time $d1))\n(= t (+ $t (* 24 60 60)))\n\n(= d2 (time-to-date $t utc))\n(hash\n  1-d1 $d1\n  2-t  $t\n  3-d2 $d2\n)",
+         "02-Description" : "This function converts a readable date into the corresponding system time value.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link time-to-date time date)"
+      },
+      "160" : {
+         "0-command" : "int",
+         "00-Name" : "int - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "161" : {
+         "0-command" : "var-capture",
+         "00-Name" : "var-capture - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "162" : {
+         "0-command" : "parse",
+         "00-Name" : "parse - Convert an expression from string to list form.",
+         "01-Synopsis" : "(parse (1 2 3 (4 5 6 (7 8 9) 10) 11 12))",
+         "02-Description" : "This macro returns the parse tree of its argument.",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "163" : {
+         "0-command" : "do",
+         "00-Name" : "do - Group multiple expressions into one",
+         "01-Synopsis" : "(do\n  (= x 10)\n  (= y 20)\n  (+ $x $y))",
+         "02-Description" : "This function is use to treat a group of expressions as one.\nThe value returned is the value of the last expression.",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "164" : {
+         "0-command" : "encode-charset",
+         "00-Name" : "encode-charset - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "165" : {
+         "0-command" : "~",
+         "00-Name" : "~ - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "166" : {
+         "0-command" : "_--",
+         "00-Name" : "_-- - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "167" : {
+         "0-command" : "eprintf",
+         "00-Name" : "eprintf - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "169" : {
+         "0-command" : "sort-num",
+         "00-Name" : "sort-num - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "17" : {
+         "0-command" : "println",
+         "00-Name" : "println - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "170" : {
+         "0-command" : "ii-new",
+         "00-Name" : "ii-new - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "171" : {
+         "0-command" : "set-var",
+         "00-Name" : "set-var - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "172" : {
+         "0-command" : "namespace",
+         "00-Name" : "namespace - Evaluate expressions within a variable namespace.",
+         "01-Synopsis" : "(= foo 42)\n(= bar zzzz)\n\n(hash\n  1-ns  (namespace example (hash foo 42000)\n          (= foo (* 10 $foo))\n          (hash\n             foo       $foo\n             bar       $bar\n             namspace  (namespace)\n          ))\n\n  2-no-ns (hash foo $foo bar $bar)\n)",
+         "02-Description" : "<p>\nThis macro lets you evaluate expressions within a separate\nvariable namespace named by the first argument.\n</p>\n\n<p>\nValues in the current variable namespace are made available to code eval'd in\nthe new variable namespace through a transfer hash in the second argument.\nVariable references in the eval'd code where the variable name is a key\nin the transfer hash return the corresponding value.\n</p>\n\n<p>\nThe remaining arguments are eval'd within the named variable space, with\nvalues in the transfer hash available as variable references.\n</p>\n\n<p>\nWhen called with no arguments, the name of the current variable namespace is returned.\n</p>\n\n<p>\nThis macro is also used internally to implement classes and instances of classes.\n</p>",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link new-inst)"
+      },
+      "173" : {
+         "0-command" : "sha256-digest",
+         "00-Name" : "sha256-digest - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "174" : {
+         "0-command" : "env",
+         "00-Name" : "env - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "175" : {
+         "0-command" : "mime-parse",
+         "00-Name" : "mime-parse - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "176" : {
+         "0-command" : "%",
+         "00-Name" : "% - Modulus",
+         "01-Synopsis" : "(% 12345 14)",
+         "02-Description" : "This function returns the remainder on integer division.",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "177" : {
+         "0-command" : "get-var",
+         "00-Name" : "get-var - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "178" : {
+         "0-command" : "+",
+         "00-Name" : "+ - Addition",
+         "01-Synopsis" : "(+ 1 2 3 4 5 6 7 8 9 10)",
+         "02-Description" : "This function returns the sum of its arguments.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link - * /)"
+      },
+      "179" : {
+         "0-command" : "sort-rlog",
+         "00-Name" : "sort-rlog - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "18" : {
+         "0-command" : "is-sym",
+         "00-Name" : "is-sym - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "180" : {
+         "0-command" : "encode-utf8",
+         "00-Name" : "encode-utf8 - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "181" : {
+         "0-command" : "dbi-st-list",
+         "00-Name" : "dbi-st-list - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "182" : {
+         "0-command" : "hash?",
+         "00-Name" : "hash? - Predicate true if argument is a hash",
+         "01-Synopsis" : "(hash\n  1 (hash? (hash 1 2 3 4))\n  2 (hash? (list 1 2 3 4))\n  3 (hash? \"1 2 3 4\")\n)",
+         "02-Description" : "This function returns true if the given argument is a hash.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link list? string? defined? undef? sym?)"
+      },
+      "183" : {
+         "0-command" : "ucfirst",
+         "00-Name" : "ucfirst - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "184" : {
+         "0-command" : "pop",
+         "00-Name" : "pop - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "185" : {
+         "0-command" : "list?",
+         "00-Name" : "list? - Predicate true if argument is a list",
+         "01-Synopsis" : "(hash\n  1 (list? (hash 1 2 3 4))\n  2 (list? (list 1 2 3 4))\n  3 (list? \"1 2 3 4\")\n)",
+         "02-Description" : "This function returns true if the given argument is a list.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link hash? string? defined? undef? sym?)"
+      },
+      "186" : {
+         "0-command" : "0-lock-acquire",
+         "00-Name" : "0-lock-acquire - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "187" : {
+         "0-command" : "eval-all",
+         "00-Name" : "eval-all - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "188" : {
+         "0-command" : "dbi-st",
+         "00-Name" : "dbi-st - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "189" : {
+         "0-command" : "max",
+         "00-Name" : "max - Return the maximum value",
+         "01-Synopsis" : "(hash\n  1-419 (max       2 3 1 91 2 4 221 2 -2 419 1 2 11)\n  2-419 (max (list 2 3 1 91 2 4 221 2 -2 419 1 2 11))\n)",
+         "02-Description" : "This function returns the largest value it was passed.\nInput parameters will be searched, or an input list if given.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link min)"
+      },
+      "19" : {
+         "0-command" : "repl",
+         "00-Name" : "repl - Read Eval Print Loop",
+         "01-Synopsis" : "(repl)",
+         "02-Description" : "This function invokes an interactive REPL and returns\nwhen EOF (control-D) is entered at the interactive prompt.",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "190" : {
+         "0-command" : "def-fn",
+         "00-Name" : "def-fn - Define a function",
+         "01-Synopsis" : "(def-fn greet (name) \"Hello $name\")\n\n(greet everyone)",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "191" : {
+         "0-command" : "var-clear",
+         "00-Name" : "var-clear - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "192" : {
+         "0-command" : "perl-eval",
+         "00-Name" : "perl-eval - Evaluate Perl code",
+         "01-Synopsis" : "// dpl -eval '(emit (perl-eval \"`cat /etc/hosts`\"))'\n\n(catch\n  (perl-eval 'system \"cat /etc/hosts\"')\n  $_err\n)",
+         "02-Description" : "This function allows Perl code to be evaluated by DPL code.\n<br/>\nThis function is only available in the runtime environment when it is invoked\nfrom a commandline and no calls to <tt>desc-read</tt> have been made.\n<br/>\nRuntime environments invoked to handle web requests drop this builtin before doing anything else.\nThe builtin function  <tt>desc-read</tt>  also drops this builtin before\nevaluating code in the <tt>on-load</tt> field.\n<br/>\nOnce dropped, a builtin function cannot be redefined with <tt>bi-import</tt>",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link desc-read on-load bi-import )"
+      },
+      "193" : {
+         "0-command" : "<<",
+         "00-Name" : "<< - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "194" : {
+         "0-command" : "bi-import",
+         "00-Name" : "bi-import - Import additional builtins functions into the runtime environment",
+         "01-Synopsis" : "(hash\n  1 (bi-import FeedEngine (fe-names))\n  2 (catch (fe-names) $_err)\n\n  3 (bi-import FeedEngine!)\n  4 (fe-names)\n)",
+         "02-Description" : "This macro extends the runtime environment's functionality by loading additional builtin\nfunctions from a named definition. <br/>\n\nIn the first form the new builtins are only visible within the bi-import call,\n  whose return value is the last value evaluated. <br/>\n\nIn the second form the name has '!' appended and the new builtins persist beyond the bi-import call. <br/>\n <br/>\nThe external definitions are found in the file <tt>$descDir/.import/$name.dpli</tt>",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link bi-drop)"
+      },
+      "195" : {
+         "0-command" : "<",
+         "00-Name" : "< - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "196" : {
+         "0-command" : "gzip",
+         "00-Name" : "gzip - Compress input data using gzip compression",
+         "01-Synopsis" : "(hash\n  1 (= data 'this is a test')\n  2 (base64-encode (gzip $data))\n)",
+         "02-Description" : "This function returns the gzip compressed binary form of the given input data.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link gunzip)"
+      },
+      "197" : {
+         "0-command" : "sym-list",
+         "00-Name" : "sym-list - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "198" : {
+         "0-command" : "srand",
+         "00-Name" : "srand - Set pseudo random number generator seed value",
+         "01-Synopsis" : "(srand (time))",
+         "02-Description" : "This function sets the seed value of the PRNG.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link rand)"
+      },
+      "199" : {
+         "0-command" : "pop-var",
+         "00-Name" : "pop-var - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "2" : {
+         "0-command" : "time",
+         "00-Name" : "time - Current system time",
+         "01-Synopsis" : "(time)",
+         "02-Description" : "This function returns the system time in \nfractional seconds since 1970-01-01T00:00:00Z",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link date)"
+      },
+      "20" : {
+         "0-command" : "async-read",
+         "00-Name" : "async-read - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "200" : {
+         "0-command" : "def-desc-fn",
+         "00-Name" : "def-desc-fn - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "201" : {
+         "0-command" : "decode-charset",
+         "00-Name" : "decode-charset - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "202" : {
+         "0-command" : "drop-builtins",
+         "00-Name" : "drop-builtins - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "203" : {
+         "0-command" : "sys-fork",
+         "00-Name" : "sys-fork - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "204" : {
+         "0-command" : "search-code",
+         "00-Name" : "search-code - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "205" : {
+         "0-command" : ">",
+         "00-Name" : "> - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "206" : {
+         "0-command" : "τ",
+         "00-Name" : "τ - Return (approximate) value of tau",
+         "01-Synopsis" : "(τ)",
+         "02-Description" : "This function returns the (approximate) value of tau, the ratio of a cirlce's circumfrence to its radius.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link π)"
+      },
+      "207" : {
+         "0-command" : "http-headers",
+         "00-Name" : "http-headers - HTTP request headers",
+         "01-Synopsis" : "(http-headers)",
+         "02-Description" : "This function returns a hash containing the HTTP headers for the current request, if applicable.",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "208" : {
+         "0-command" : "reverse",
+         "00-Name" : "reverse - Reverse the items in a list",
+         "01-Synopsis" : "(reverse (list 1 2 3 4 5))",
+         "02-Description" : "This function returns a list with the items in the\nopposite order of the list that is passed in.",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "209" : {
+         "0-command" : "report",
+         "00-Name" : "report - basic message logging",
+         "01-Synopsis" : "(report 'hello: %s' $session-id)",
+         "02-Description" : "This function appends a timestamped string to the <tt>.dplx.log</tt> file.\n\nThis string contains the message passed in.",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "21" : {
+         "0-command" : "undef?",
+         "00-Name" : "undef? - Predicate true if argument is undefined",
+         "01-Synopsis" : "(hash\n  1 (undef? (hash 1 2 3 4))\n  2 (undef? (list 1 2 3 4))\n  3 (undef? \"1 2 3 4\")\n\n  4 (undef? ())\n  5 (undef? (null))\n)",
+         "02-Description" : "This function returns true if the given argument does not have a defined value.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link list? string? hash? defined? sym?)"
+      },
+      "210" : {
+         "0-command" : "lt",
+         "00-Name" : "lt - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "211" : {
+         "0-command" : "dbi-connect",
+         "00-Name" : "dbi-connect - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "212" : {
+         "0-command" : "&",
+         "00-Name" : "& - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "213" : {
+         "0-command" : "->",
+         "00-Name" : "-> - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "214" : {
+         "0-command" : "len",
+         "00-Name" : "len - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "215" : {
+         "0-command" : "x",
+         "00-Name" : "x - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "216" : {
+         "0-command" : "time-to-date",
+         "00-Name" : "time-to-date - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "217" : {
+         "0-command" : "sys-wait",
+         "00-Name" : "sys-wait - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "218" : {
+         "0-command" : "sort-pred",
+         "00-Name" : "sort-pred - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "219" : {
+         "0-command" : "map-hash",
+         "00-Name" : "map-hash - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "22" : {
+         "0-command" : "list-len",
+         "00-Name" : "list-len - Return number of items in list",
+         "01-Synopsis" : "(list-len (list 1 2 3 4 5 6 7 8 9 10))",
+         "02-Description" : "This function returns the length of a list,\nor equivalently the number of items in the list.",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "220" : {
+         "0-command" : "apply",
+         "00-Name" : "apply - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "221" : {
+         "0-command" : "cos",
+         "00-Name" : "cos - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "222" : {
+         "0-command" : "deref-url",
+         "00-Name" : "deref-url - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "223" : {
+         "0-command" : "expr",
+         "00-Name" : "expr - return arg as a string",
+         "01-Synopsis" : "(ct)(bl)\n(print (expr (This is (some expr))))",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "224" : {
+         "0-command" : "rcs-vers",
+         "00-Name" : "rcs-vers - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "225" : {
+         "0-command" : "sha-digest",
+         "00-Name" : "sha-digest - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "226" : {
+         "0-command" : "log",
+         "00-Name" : "log - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "227" : {
+         "0-command" : "sprintf",
+         "00-Name" : "sprintf - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "228" : {
+         "0-command" : "!=",
+         "00-Name" : "!= - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "229" : {
+         "0-command" : "eval",
+         "00-Name" : "eval - Evaluate expression and return its value",
+         "01-Synopsis" : "(= code (sprintf '(%s %s %s)' + 2 3))\n\n(hash\n   1-code $code\n   2-val  (eval $code)\n)",
+         "02-Description" : "This function evaluates a string, assuming it to be a PrimaLisp expression,\nand returns the value found.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link eval-all)"
+      },
+      "23" : {
+         "0-command" : "eprintln",
+         "00-Name" : "eprintln - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "230" : {
+         "0-command" : "var-pop",
+         "00-Name" : "var-pop - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "231" : {
+         "0-command" : "π",
+         "00-Name" : "π - Return (approximate) value of pi",
+         "01-Synopsis" : "(π)",
+         "02-Description" : "This function returns the (approximate) value of pi, the ratio of a cirlce's circumfrence to its diameter.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link π τ)"
+      },
+      "232" : {
+         "0-command" : "first",
+         "00-Name" : "first - Return the first item a list.",
+         "01-Synopsis" : "(first (list 5 4 3 2 1))",
+         "02-Description" : "This function returns the first item in the given list.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link rest next last push pop shift unshift ith)"
+      },
+      "233" : {
+         "0-command" : "rand",
+         "00-Name" : "rand - (pseudo) random value",
+         "01-Synopsis" : "(list\n  (rand)\n  (rand 10)\n  (rand 1000)\n)",
+         "02-Description" : "This function returns pseudo random values.\n<br/>\nBy default the values are between 0 and 1.\n<br/>\nIf there is an argument given, the value will range between 0 and that value.\n<p>\nThe value used as a seed for the PRNG can be set by calling <tt>srand</tt>.\n</p>",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link srand)"
+      },
+      "234" : {
+         "0-command" : "0-lock-release",
+         "00-Name" : "0-lock-release - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "235" : {
+         "0-command" : "min",
+         "00-Name" : "min - Return the minumum value",
+         "01-Synopsis" : "(hash\n  1--221 (min       2 3 1 91 2 4 -221 2 -2 419 1 2 11)\n  2--221 (min (list 2 3 1 91 2 4 -221 2 -2 419 1 2 11))\n)",
+         "02-Description" : "This function returns the smallest value it was passed.\nInput parameters will be searched, or an input list if given.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link max)"
+      },
+      "236" : {
+         "0-command" : "desc-list",
+         "00-Name" : "desc-list - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "237" : {
+         "0-command" : "..",
+         "00-Name" : ".. - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "238" : {
+         "0-command" : "return",
+         "00-Name" : "return - Immediate return from a function",
+         "01-Synopsis" : "(def-fn foo (x)\n  (if (< $x 0) (return \"can't do it\"))\n  (sqrt $x))\n\n(hash\n  1-no  (foo  -1)\n  2-yes (foo   0)\n  3-yes (foo   2)\n  4-no  (foo -10)\n)",
+         "02-Description" : "This is the mechanism to return immediately from a function.",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "239" : {
+         "0-command" : "desc-read",
+         "00-Name" : "desc-read - Load a Descriptor from persistent storage",
+         "01-Synopsis" : "(desc-read self echo)",
+         "02-Description" : "This function loads the named descriptor from the the descriptor directory. <br/>\n\nIf the descriptor has a top-level field called <tt>on-load</tt> it is assumed to contain a \nfunction definition, and that function is called.  This is typically used to setup\nother functions defined in the descriptor via <tt>(def-hash-fn)</tt>.  <br/>  <br/>\n\nIf an HTTP URL is used as the name, that URL is fetched.\nThis is most useful if the URL in fact refers to a descriptor on a remote DPL host (e.g. http://rem-host/api/dple/DescName),\nor if the URL refers to some other JSON resource out there...",
+         "03-Options" : "(html-ul\n (html-li  'reload [1|0]')\n (html-li  'no-on-load [1|0]')\n (html-li  'revision -rcs-id-')\n (html-li  'as-of -date-')\n)",
+         "04-See-Also" : "(man-link desc-write dplx:on-load)"
+      },
+      "24" : {
+         "0-command" : ">=",
+         "00-Name" : ">= - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "240" : {
+         "0-command" : "dbi-db",
+         "00-Name" : "dbi-db - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "241" : {
+         "0-command" : "cmp",
+         "00-Name" : "cmp - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "242" : {
+         "0-command" : "var-restore",
+         "00-Name" : "var-restore - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "243" : {
+         "0-command" : "msg-reply",
+         "00-Name" : "msg-reply - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "244" : {
+         "0-command" : "decode-utf8",
+         "00-Name" : "decode-utf8 - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "245" : {
+         "0-command" : "hash-clear",
+         "00-Name" : "hash-clear - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "246" : {
+         "0-command" : "sleep",
+         "00-Name" : "sleep - Zzzz",
+         "01-Synopsis" : "(sleep 5)",
+         "02-Description" : "This function returns after the specified number of seconds (at least).",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "247" : {
+         "0-command" : "dbi-quote",
+         "00-Name" : "dbi-quote - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "248" : {
+         "0-command" : "hash-eval",
+         "00-Name" : "hash-eval - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "249" : {
+         "0-command" : "/",
+         "00-Name" : "/ - Divide by",
+         "01-Synopsis" : "(list \n  (/ 100 4)\n  (/ 100 4 5 2)\n)",
+         "02-Description" : "This function returns the result of the first value divided by the second value\n(and again by any subsequent values).  It is an alias for ÃÂÃÂ·",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link + - * ÃÂÃÂ·)"
+      },
+      "25" : {
+         "0-command" : "==",
+         "00-Name" : "== - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "250" : {
+         "0-command" : "false",
+         "00-Name" : "false - JSON false",
+         "01-Synopsis" : "(list (false))",
+         "02-Description" : "This function returns a value which will be serialized as JSON false.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link true null)"
+      },
+      "251" : {
+         "0-command" : "hex-decode",
+         "00-Name" : "hex-decode - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "252" : {
+         "0-command" : "hex-encode",
+         "00-Name" : "hex-encode - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "253" : {
+         "0-command" : "macro?",
+         "00-Name" : "macro? - Predicate to test if a value is a macro",
+         "01-Synopsis" : "(def-fn    foo-fn    () xx)\n(def-macro foo-macro () xx)\n\n(def-fn test (name)\n  (if (macro? $name)\n    \"yes $name is a macro\"\n    \"no $name isn't a macro\"))\n\n(hash\n  foo-fn   (test foo-fn)\n  fo-macro (test foo-macro)\n)",
+         "02-Description" : "This predicate returns true if its argument is a macro, false otherwise.",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "254" : {
+         "0-command" : "null",
+         "00-Name" : "null - JSON null",
+         "01-Synopsis" : "(list (null))",
+         "02-Description" : "This function returns a value which will be serialized as JSON null.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link true false)"
+      },
+      "255" : {
+         "0-command" : "oncomma",
+         "00-Name" : "oncomma - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "256" : {
+         "0-command" : "true",
+         "00-Name" : "true - JSON true",
+         "01-Synopsis" : "(list (true))",
+         "02-Description" : "This function returns a value which will be serialized as JSON true.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link false null)"
+      },
+      "26" : {
+         "0-command" : "trim",
+         "00-Name" : "trim - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "261" : {
+         "0-command" : "on-load",
+         "00-Name" : "on-load - The descriptor defined function called when desc-read loads the descriptor",
+         "01-Synopsis" : "(= desc-name on-load-man-synop-example)\n\n(= descriptor (hash\n  main    (fn ()\n    (ct)(bl)\n    (print \"some-var: $some-var\\n\"))\n\n  on-load (fn ()\n    (= some-var 420)\n    (report 'Hello world'))\n))\n\n(= edit-link (sprintf http://%s/api/dple/%s\n  (hash-get (http-headers) / Host)\n  $desc-name))\n\n\n(desc-write $descriptor $desc-name)\n(= some-var 42)\n(hash\n  1-some-var-before  $some-var\n  2-desc-read        (desc-read example $desc-name)\n  3-some-var-after   $some-var\n  4-dple             $edit-link\n)",
+         "02-Description" : "This descriptor field contains a lambda expression defining the function\ncalled when the descriptor is read in by <tt>desc-read</tt>.",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "263" : {
+         "0-command" : "new",
+         "00-Name" : "new - Descriptor instance constructor",
+         "01-Synopsis" : "",
+         "02-Description" : "This top-level descriptor fuction is the\nconstructor called by <tt>new-inst</tt>.\n<br/>\nWithin the constructor and methods, the variable <tt>self</tt> refers to the current instance.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link new-inst)"
+      },
+      "266" : {
+         "0-command" : "if",
+         "00-Name" : "if - Conditional expression",
+         "01-Synopsis" : "(if  $cond  $do-if-true)\n\n(if  $cond\n   $do-if-true\n   $do-if-false)\n\n(if\n  $cond-1  $do-if-cond-1-true\n  $cond-2  $do-if-cond-2-true)\n\n...\n\n(if\n  $cond-1  $do-if-cond-1-true\n  ...      ...\n  $cond-N  $do-if-cond-N-true\n  $do-otherwise)\n\n(if\n  $cond-1  $do-if-cond-1-true\n  ...      ...\n  $cond-N  $do-if-cond-N-true)\n\n(= toss (if (< (rand) 0.5) heads tails))",
+         "02-Description" : "<p>\nThis is the conditional expression.\nIt is used as the tradition if/elsif/else construct,\nswitch statement and <tt>?:</tt> operator.\n</p>\n<ul>\n <li> The 'cond' expressions are evaluated one by one until the first true value is returned. </li>\n <li> The corresponding 'do-if' expression is then evaluated. </li>\n <li> If no 'cond' expression returns true and there is a do-otherwise expression, it is  evaluated. </li>\n</ul>\n<p>\nThis function returns the value of the 'do-*' expression that was evaluated, or undefined if none were.\n</p>",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "267" : {
+         "0-command" : "while",
+         "00-Name" : "while - Iterate while a condition is true",
+         "01-Synopsis" : "// return date at the next multiple of 10 seconds...\n(while (!= 0 (% (int (time)) 10))\n  (sleep 1))\n(sprintf 'date: %s' (date))",
+         "02-Description" : "This is the traditional <tt>while</tt> iteration mechanism.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link map-list foreach)"
+      },
+      "268" : {
+         "0-command" : "catch",
+         "00-Name" : "catch - Catch exceptions",
+         "01-Synopsis" : "(catch (do something) $[_err _cs])",
+         "02-Description" : "This is the mechanism for handling exceptions.\n<p>\nNormally, only the first expression is evaluated, and its value returned.\n</p>\n<p>\nBut if, during this evaluation, there is a call to <tt>throw</tt> (or an internal exception),\nthen the remaining expressions are evaluated next\n(with the variable <tt>_err</tt> holding the value that was passed to <tt>throw</tt>),\nand the final value evaluated is returned.\n</p>",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link throw _err _cs)"
+      },
+      "269" : {
+         "0-command" : "expr-to-list",
+         "00-Name" : "expr-to-list - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "27" : {
+         "0-command" : "msg-asend",
+         "00-Name" : "msg-asend - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "270" : {
+         "0-command" : "fn",
+         "00-Name" : "fn - Lambda expression",
+         "01-Synopsis" : "(fn ( arg1 arg2 ... &args -- local1 local2 ... )\n  body-expressions\n  ...\n)",
+         "02-Description" : "This is the mechanism used to define a function.\n<br/>\nA lambda expression:\n<ul>\n  <li> is a function literal,\n  <li> evaluates to itself,\n  <li> can be passed as an argument,\n  <li> can be used after an opening paren as the anonymous function being called,\n  <li> can be stored in a variable to be called as a named function.\n</ul>\n\nIn the parameter list the follows the <tt>fn</tt>:\n<ul>\n <li> variables <tt>args1, args2, ... </tt> will hold the values passed in to\n      the function when it is called. </li>\n <li> if <tt>&args</tt> appears among the names, variable <tt>args</tt> will\n      hold a list of the remaining input parameters. </li>\n <li> by convention, if <tt>--</tt> appears among the names, that indicates that\n      the remaining variable names should have <i>lexical scope</i>\n</ul>\n\nEvaluation and return values:\n<ul>\n <li> The body expressions are evaluated in the usual way, with the function\nreturning the value of the last expression to be evaluated. </li>\n <li> The function can also return a value at any point by calling <tt>return</tt>. </li>\n</ul>",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link def-fn def-hash-fn def-desc-fn return)"
+      },
+      "271" : {
+         "0-command" : "λ",
+         "00-Name" : "λ - Lambda expression",
+         "01-Synopsis" : "((λ (name) \"Hello $name\") (hostname))",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "272" : {
+         "0-command" : "λ",
+         "00-Name" : "λ - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "273" : {
+         "0-command" : "_err",
+         "00-Name" : "_err - Variable holding exception message",
+         "01-Synopsis" : "",
+         "02-Description" : "This is the variable that holds the exception message.\nIt is set by <tt>catch</tt> in response to a call to <tt>throw</tt>.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link catch throw)"
+      },
+      "275" : {
+         "0-command" : "dplx",
+         "00-Name" : "dplx - DPL webservice dispatcher",
+         "01-Synopsis" : "// webservice:\n//   http://hostname/api/dplx/-desc-name-\n//\n// cmdline:\n//   dplx desc-name [path-info [query-args]]",
+         "02-Description" : "This dispatch system is implemented as a cgi-bin script and a descriptor, both named <tt>dplx</tt>.\n<p>\nThe cgi-bin script gathers the request info into particular variables and\nthen invokes the <tt>dplx</tt> descriptor to handle the remainder of the call.\n</p>\n<p>\nThe webserver invoking the <tt>dplx</tt> cgi-bin script should be configured to allow <tt>/api</tt>\nto be an alias for <tt>/cgi-bin</tt>.\n<p>\n<p>\nThis script can also be invoked from the commandline for testing.\n</p>",
+         "03-Options" : "",
+         "04-See-Also" : "(html-link \"http://$app-server/api/dple/dplx\" 'dplx descriptor')"
+      },
+      "276" : {
+         "0-command" : "dple",
+         "00-Name" : "dple - DPL editor",
+         "01-Synopsis" : "",
+         "02-Description" : "This webapp is the DPL descriptor editor.",
+         "03-Options" : "",
+         "04-See-Also" : "(do\n  (= img-url \"http://$app-server/desc-editor-devui-legend.jpg\")\n  (html-link $img-url \"<img width='200' src='$img-url' border='0'/>\"))"
+      },
+      "277" : {
+         "0-command" : "dpld",
+         "00-Name" : "dpld - Standalone DPL HTTP server",
+         "01-Synopsis" : "// dpld\n// dpld -port PORT\n// dpld -restart\n// dpld -stop\n// dpld -status\n// dpld -desc DESC-DIR",
+         "02-Description" : "This is an implmentation of a DPL dispatcher not tied to cgi-bin or a webserver.",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "278" : {
+         "0-command" : "dpli",
+         "00-Name" : "dpli - DPL builtin function import module",
+         "01-Synopsis" : "",
+         "02-Description" : "<p>This file extension identifies a file which can be loaded\ninto a runtime environment to provide additional builtin functions.</p>\n<p>These files are located in the descriptor directory under <tt>.import</tt></p>",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link bi-import)"
+      },
+      "279" : {
+         "0-command" : "list-merge",
+         "00-Name" : "list-merge - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "28" : {
+         "0-command" : "×",
+         "00-Name" : "× - Multiply function",
+         "01-Synopsis" : "(× 1 2 3 4 5 6 7 8 9 10)",
+         "02-Description" : "This  function returns the product of its arguments.\n\nThe conventional name '*' is an alias for this function.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link + - * / × ÷ )"
+      },
+      "280" : {
+         "0-command" : "rand-guid",
+         "00-Name" : "rand-guid - Return a random GUID string",
+         "01-Synopsis" : "(rand-guid)",
+         "02-Description" : "This function generates a GUID formatted string containing a 'random' value.",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "282" : {
+         "0-command" : "hash-move",
+         "00-Name" : "hash-move - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "283" : {
+         "0-command" : "hash-rename",
+         "00-Name" : "hash-rename - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "284" : {
+         "0-command" : "ip-addr-to-dns-name",
+         "00-Name" : "ip-addr-to-dns-name -",
+         "01-Synopsis" : "(list\n (ip-addr-to-dns-name 127.0.0.1)\n (ip-addr-to-dns-name 192.168.1.111)\n)",
+         "02-Description" : "This function preforms a reverse DNS lookup on th egiven IP address and returns\nthe hostname, if found, or the original IP address.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link remote-addr)"
+      },
+      "286" : {
+         "0-command" : "fn-encap",
+         "00-Name" : "fn-encap - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "287" : {
+         "0-command" : "atomic",
+         "00-Name" : "atomic - Evaluate exprs within a critical section.",
+         "01-Synopsis" : "(atomic sample\n  (desc-read desc atomic-sample)\n  (if (undef? (= c (hash-get $desc / counter))\n    (= c 0))\n\n  (++_ c)\n  (hash-set $desc / counter $c)\n)",
+         "02-Description" : "This macros provides a mutual exclusion environment for the enclosed expressions.",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "288" : {
+         "0-command" : "undef",
+         "00-Name" : "undef - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "289" : {
+         "0-command" : "defined",
+         "00-Name" : "defined - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "29" : {
+         "0-command" : "hash",
+         "00-Name" : "hash - Return a Map initialized with any (name/value pair) args",
+         "01-Synopsis" : "(hash\n  1  one\n  2  two\n  3  three\n  4  four\n)",
+         "02-Description" : "This function returns a hash (Map) initialized with the given <i>pairs</i> of arguments.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link hash? list)"
+      },
+      "290" : {
+         "0-command" : "start-worker",
+         "00-Name" : "start-worker - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "291" : {
+         "0-command" : "report-vars",
+         "00-Name" : "report-vars - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "292" : {
+         "0-command" : "=?",
+         "00-Name" : "=? - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "293" : {
+         "0-command" : "assert",
+         "00-Name" : "assert -",
+         "01-Synopsis" : "(assert 'some prose self-evidently true; pass!' (true))\n(assert 'some prose self-evidently true; fail!' (false))",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "294" : {
+         "0-command" : "dbm-atomic",
+         "00-Name" : "dbm-atomic - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "3" : {
+         "0-command" : "help",
+         "00-Name" : "help - Help!",
+         "01-Synopsis" : "(list\n  (help desc)\n  (help)\n)",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "30" : {
+         "0-command" : "utf8-decode",
+         "00-Name" : "utf8-decode - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "31" : {
+         "0-command" : "--_",
+         "00-Name" : "--_ - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "32" : {
+         "0-command" : "desc-get",
+         "00-Name" : "desc-get - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "33" : {
+         "0-command" : "=~",
+         "00-Name" : "=~ - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "34" : {
+         "0-command" : "ge",
+         "00-Name" : "ge - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "35" : {
+         "0-command" : "gunzip",
+         "00-Name" : "gunzip - Uncompress input data using gzip compression.",
+         "01-Synopsis" : "(hash\n  1 (= data-gz  H4sIAAAAAAAA/yvJyCxWAKJEhZLU4hIA6uceDQ4AAAA=)\n  2 (gunzip (base64-decode $data-gz))\n)",
+         "02-Description" : "This function returns the gzip uncompressed form of the given input data.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link gzip)"
+      },
+      "36" : {
+         "0-command" : "rest",
+         "00-Name" : "rest - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "37" : {
+         "0-command" : "pm-call-list",
+         "00-Name" : "pm-call-list - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "38" : {
+         "0-command" : "pm-call",
+         "00-Name" : "pm-call - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "39" : {
+         "0-command" : "-",
+         "00-Name" : "- Subtraction",
+         "01-Synopsis" : "(- 100 9 8 7 6 5 4 3 2 1)",
+         "02-Description" : "This function returns the difference between the first and second arguments.  Any remaining arguments are subtracted from this difference.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link + - * /)"
+      },
+      "4" : {
+         "0-command" : "ne",
+         "00-Name" : "ne - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "40" : {
+         "0-command" : "zonk",
+         "00-Name" : "zonk - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "41" : {
+         "0-command" : "unshift",
+         "00-Name" : "unshift - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "42" : {
+         "0-command" : "uc",
+         "00-Name" : "uc - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "43" : {
+         "0-command" : "lock-acquire",
+         "00-Name" : "lock-acquire - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "44" : {
+         "0-command" : "base64-decode",
+         "00-Name" : "base64-decode - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "45" : {
+         "0-command" : "eprint",
+         "00-Name" : "eprint - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "46" : {
+         "0-command" : "!",
+         "00-Name" : "! - Boolean NOT",
+         "01-Synopsis" : "(! (eq a b))",
+         "02-Description" : "Returns the Boolean negation of its argument.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link && ||)"
+      },
+      "47" : {
+         "0-command" : "dbi-prepare",
+         "00-Name" : "dbi-prepare - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "48" : {
+         "0-command" : "throw",
+         "00-Name" : "throw - Throw an exception",
+         "01-Synopsis" : "(throw \"this is a test\")",
+         "02-Description" : "This function causes an exception to be thrown to a waiting <tt>catch</tt>.\nThe value passed to <tt>throw</tt> appears as the variable <tt>_err</tt> in the <tt>catch</tt> exception handler.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link catch _err)"
+      },
+      "49" : {
+         "0-command" : "&&",
+         "00-Name" : "&& - early out Boolean AND",
+         "01-Synopsis" : "(html-pre <<FINI\n  (&& -pred-1- -pred-2- -pred-3- ...)\nFINI)",
+         "02-Description" : "Evaluates its args, left to right, one at a time, until an evaluation returns <i>false</i>, then <tt>0</tt> is returned. <br/>\nOtherwise <tt>1</tt> is returned. <br/>\nReturns <tt>1</tt> if all its args are true, <tt>0</tt> otherwise.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link || !)"
+      },
+      "5" : {
+         "0-command" : "sym-to-string",
+         "00-Name" : "sym-to-string - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "50" : {
+         "0-command" : "version",
+         "00-Name" : "version - DPL version information",
+         "01-Synopsis" : "(version)",
+         "02-Description" : "This function returns version information for the underlying runtime environment.",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "51" : {
+         "0-command" : "last",
+         "00-Name" : "last - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "52" : {
+         "0-command" : "is-list",
+         "00-Name" : "is-list - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "53" : {
+         "0-command" : "concat",
+         "00-Name" : "concat - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "54" : {
+         "0-command" : "xmldecode",
+         "00-Name" : "xmldecode - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "55" : {
+         "0-command" : "desc-rlog-diff-rec",
+         "00-Name" : "desc-rlog-diff-rec - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "56" : {
+         "0-command" : "list-reduce",
+         "00-Name" : "list-reduce - Return accumulated result over a list of items",
+         "01-Synopsis" : "// sum of the squares of numbers from 1 to 10.\n(def-fn sq (x) (* $x $x))\n(list-reduce + (map-list sq (.. 1 10)))",
+         "02-Description" : "This function applies a function to a list of values to obtain a single value.\nThe function should take two arguments. The first is the value being accumulated.\nThe second is the item from the list.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link map-list)"
+      },
+      "57" : {
+         "0-command" : "sym?",
+         "00-Name" : "sym? - Predicate true if argument is a symbol.",
+         "01-Synopsis" : "(= s (sym-from-string 'Some text here'))\n\n(hash\n  1 $s  //breaks here!\n  2 (sym? $s)\n  3 (sym-to-string $s)\n)",
+         "02-Description" : "This function returns true if its argument is a symbol.",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "58" : {
+         "0-command" : "gt",
+         "00-Name" : "gt - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "59" : {
+         "0-command" : "desc-write",
+         "00-Name" : "desc-write -",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link desc-read)"
+      },
+      "6" : {
+         "0-command" : "sqrt",
+         "00-Name" : "sqrt - Square root",
+         "01-Synopsis" : "(sqrt 144)",
+         "02-Description" : "This function returns the square root of its argument.",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "60" : {
+         "0-command" : "pp-set",
+         "00-Name" : "pp-set - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "61" : {
+         "0-command" : "new-inst",
+         "00-Name" : "new-inst - Create a descriptor instace",
+         "01-Synopsis" : "(= p (new-inst v1.5 srvdevapp15:8091 9999))\n($p query Toyota)",
+         "02-Description" : "This function returns an instance (object)\nof the class defined by the named descriptor.\n<br/>\nThe top-level function <tt>new</tt> is called as the constructor.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link new dplx:new)"
+      },
+      "62" : {
+         "0-command" : "builtins",
+         "00-Name" : "builtins - List of builtin functions",
+         "01-Synopsis" : "(builtins)",
+         "02-Description" : "This function returns a hash with keys being the names of the current builtin functions.",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "63" : {
+         "0-command" : "hash-set",
+         "00-Name" : "hash-set - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "64" : {
+         "0-command" : "next",
+         "00-Name" : "next - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "65" : {
+         "0-command" : "desc-to-string",
+         "00-Name" : "desc-to-string - JSON serialization",
+         "01-Synopsis" : "(= d {A (list 1 2 3) B {A B}})\n\n{\n  1 $d\n  2 (desc-to-string $d)\n}",
+         "02-Description" : "This function converts a  descriptor to a JSON string.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link desc-from-string)"
+      },
+      "66" : {
+         "0-command" : "sym-from-string",
+         "00-Name" : "sym-from-string - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "67" : {
+         "0-command" : "map-list",
+         "00-Name" : "map-list - call a function with each element of a list",
+         "01-Synopsis" : "(hash\n  1  (map-list println (.. 1 10))\n  2  (map-list (fn (n) (printf 'n: %d\\n' $n)) (.. 100 199))\n)",
+         "02-Description" : "This function calls its given function once for (and with) each item in the given list.\nThe return value is a list of the return values from each function call.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link list-reduce)"
+      },
+      "68" : {
+         "0-command" : "=",
+         "00-Name" : "= - assign a value to a variable",
+         "01-Synopsis" : "(= n-rows 42)\n\n// variables can have 'attributes' too\n(= title 'This is it!' (hash date 2011))  \n\n(hash\n  1 (sprintf 'n-rows: %d'       $n-rows)\n  2 (sprintf 'title: \"%s\" (%s)' $title $title/date))",
+         "02-Description" : "This function assigns a value to a variable.\nThis is an alias for the builtin function <tt>(var-set ...)</tt>",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link var-set var-get var-clear)"
+      },
+      "69" : {
+         "0-command" : "exit",
+         "00-Name" : "exit - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "7" : {
+         "0-command" : "defined&&1?",
+         "00-Name" : "defined&&1? - Defined and true predicate",
+         "01-Synopsis" : "(= val-0 ())\n(= val-1 '')\n(= val-2  0)\n(= val-3  1)\n\n(hash\n  0-false (defined&&1? $val-0)\n  1-false (defined&&1? $val-1)\n  2-false (defined&&1? $val-2)\n  3-true  (defined&&1? $val-3)\n)",
+         "02-Description" : "This predicate returns true only if the argument is defined and true.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link defined&&0?)"
+      },
+      "70" : {
+         "0-command" : "substr",
+         "00-Name" : "substr - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "71" : {
+         "0-command" : "xmlencode",
+         "00-Name" : "xmlencode - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "72" : {
+         "0-command" : "dbm-close",
+         "00-Name" : "dbm-close - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "73" : {
+         "0-command" : "grep",
+         "00-Name" : "grep - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "74" : {
+         "0-command" : "_++",
+         "00-Name" : "_++ - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "75" : {
+         "0-command" : "desc-eval",
+         "00-Name" : "desc-eval - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "76" : {
+         "0-command" : "debug",
+         "00-Name" : "debug - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "77" : {
+         "0-command" : "sort-alpha",
+         "00-Name" : "sort-alpha - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "78" : {
+         "0-command" : "split",
+         "00-Name" : "split - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "79" : {
+         "0-command" : "exp",
+         "00-Name" : "exp - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "8" : {
+         "0-command" : "hash-get",
+         "00-Name" : "hash-get - get a value from a nested hash",
+         "01-Synopsis" : "(= desc {\n  foo 42\n  bar {\n    baz 420\n    quux  {\n      fnord! 42000\n    }\n  }\n})\n\n[\n (hash-get $desc /         foo)\n (hash-get $desc /bar      baz)\n (hash-get $desc /bar/quux fnord!)\n]",
+         "02-Description" : "This function returns the specified value within a nested hash.\nIf -path- is a list it is taken to be the list of path names.\nThis way path names containing slashes can be used.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link hash-set hash-clear hash-keys hash-paths)"
+      },
+      "80" : {
+         "0-command" : "push-var",
+         "00-Name" : "push-var - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "81" : {
+         "0-command" : "<=",
+         "00-Name" : "<= - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "82" : {
+         "0-command" : "pm-new",
+         "00-Name" : "pm-new - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "83" : {
+         "0-command" : "md5-digest",
+         "00-Name" : "md5-digest - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "84" : {
+         "0-command" : "is-hash",
+         "00-Name" : "is-hash - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "85" : {
+         "0-command" : "print-banner",
+         "00-Name" : "print-banner - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "86" : {
+         "0-command" : "lock-release",
+         "00-Name" : "lock-release - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "87" : {
+         "0-command" : "dump-vars",
+         "00-Name" : "dump-vars - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "88" : {
+         "0-command" : "desc-from-string",
+         "00-Name" : "desc-from-string - JSON deserialization",
+         "01-Synopsis" : "(= str '{ \"A\" : [ \"1\", \"2\", \"3\" ], \"B\" : { \"A\" : \"B\" } }')\n\n(hash\n  1 $str\n  2 (desc-from-string $str)\n)",
+         "02-Description" : "This function converts a JSON string to a descriptor.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link desc-to-string)"
+      },
+      "89" : {
+         "0-command" : "ii-eval",
+         "00-Name" : "ii-eval - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "9" : {
+         "0-command" : "statistics",
+         "00-Name" : "statistics -",
+         "01-Synopsis" : "(statistics)",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "90" : {
+         "0-command" : "sin",
+         "00-Name" : "sin - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "91" : {
+         "0-command" : "push",
+         "00-Name" : "push - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "92" : {
+         "0-command" : "ith",
+         "00-Name" : "ith - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "93" : {
+         "0-command" : "shift",
+         "00-Name" : "shift - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "94" : {
+         "0-command" : "**",
+         "00-Name" : "** - exponentiation",
+         "01-Synopsis" : "// returns 8\n(** 2 3)   \n   \n// returns 70.5602900786735\n(** 1.03 144)",
+         "02-Description" : "The usual.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link exp log)"
+      },
+      "95" : {
+         "0-command" : "tan",
+         "00-Name" : "tan - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "96" : {
+         "0-command" : "desc-set",
+         "00-Name" : "desc-set - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "97" : {
+         "0-command" : "oi-trap",
+         "00-Name" : "oi-trap - ",
+         "01-Synopsis" : "",
+         "02-Description" : "",
+         "03-Options" : "",
+         "04-See-Also" : ""
+      },
+      "98" : {
+         "0-command" : "string?",
+         "00-Name" : "string? - Predicate true if argument is a string",
+         "01-Synopsis" : "(hash\n  1 (string? (hash 1 2 3 4))\n  2 (string? (list 1 2 3 4))\n  3 (string? \"1 2 3 4\")\n)",
+         "02-Description" : "This function returns true if the given argument is a string.",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link list? hash? defined? undef? sym?)"
+      },
+      "99" : {
+         "0-command" : "update-DPL-dist",
+         "00-Name" : "update-DPL-dist - Install the remotely obtained DPL dist file overtop current DPL installation.",
+         "01-Synopsis" : "// This function is typically invoked indirectly from a shell as:\n//   dpl -update     or\n//   dpl -update SourceHost:Port\n// which internally calls:\n//   (update-DPL-dist SourceHost:Port)\n// to perform the update.",
+         "02-Description" : "This function updates the current DPL installation based on another DPL installation. <br/>\n\nIt takes a <tt>host:port</tt> source specification and\ninstalls the dist file obtained therefrom overtop the current DPL installation.<br/><br/>\n\n<font color=\"orange\"> Use with caution. Know your source. </font>",
+         "03-Options" : "",
+         "04-See-Also" : "(man-link get-DPL-dist)"
+      }
+   },
+   "rcs-id" : "$Id: man.docs,v 1.1416 2013/03/19 07:38:07 apache Exp apache $"
+}
