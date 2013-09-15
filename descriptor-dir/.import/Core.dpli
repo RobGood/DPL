@@ -1,0 +1,5784 @@
+# -*- coding: UTF-8 -*-
+# $Id: Core.dpli,v 1.327 2013/04/18 19:17:55 rcgood Exp $
+#
+# This file contains implementations of the core DPL builtin functions not found in PrimaLisp.pm,
+# and their supporting code.
+# Copyright (C) 2010-2013 Rob Good
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+
+use Time::HiRes qw(time);
+use Encode;
+use File::Path;
+use MIME::Base64;
+use Compress::Zlib;
+use Digest::MD5;
+use Digest::SHA;
+use HTTP::Date;
+use DB_File;
+use IPC::SysV qw(ftok IPC_PRIVATE S_IRWXU IPC_CREAT);
+use IPC::Semaphore;
+use Crypt::CBC;
+use Crypt::OpenSSL::AES;
+
+use Socket;
+use FileHandle;
+
+#!!#  (pm-new and pm-call might be wide open security holes waiting to happen!!!!!
+$pmClassWhiteList = { map { $_ => 1 } (
+    'Profiler',
+    'Platform',
+    'JSON',
+    'XML::LibXML',
+    'XML::LibXML::XPathContext',
+    'XML::LibXML::Element',
+    'XML::LibXML::Document',
+    'XML::LibXML::Attr',
+    'Net::Amazon::AWSSign',
+    'Solr',
+    'Crypt::OpenSSL::AES',
+    'Crypt::CBC',
+#   'DBI',
+)};
+
+sub pmClassWhiteList_add { map { $pmClassWhiteList->{$_} = 1 } @_ }
+#!!#  (pm-new and pm-call might be wide open security holes waiting to happen!!!!!
+
+
+# Global map of string to symbol (scalar ref to a copy of that string)
+my %SymMap = ( );
+
+# Track who has locks and for how long.
+my %LockTokenMap  = ( );
+my %LockHoldTimes = ( );
+
+# Track remote interpreters.
+my %remoteInterpreterInfo = ();
+
+# Track descriptor replay FileHandles
+my %descReplayInfo = ();
+
+# perl ithreads something.
+my $notifier_tid;
+
+#------------------------------------------------------------------------------------
+
+# We need to put some things into the PrimaLisp package so that from within builtin
+# implementations they are visible.
+
+{
+  package PrimaLisp;
+  use MIME::Base64;
+  use File::Path;
+
+  sub
+  _assertIsValidTypeName {
+    my ($o, $type, $name) = @_;
+    $o->throw("Invalid $type '$name'.")
+        unless defined $name && $name =~ /^[-.:\w]+$/;
+
+    return;
+  } 
+
+  sub
+  _msg_mkfifo {
+    my ($o, $req, $dir) = @_;
+
+    # $o->throw("Invalid message port '$req'.") unless $req =~ /^[-.:\w]+$/;
+    $o->_assertIsValidTypeName('message port', $req);
+
+    $req = "$dir/$req" if defined $dir;
+
+    $dir  = sprintf '%s/.msg', $o->{descDir};
+    mkpath $dir;
+
+    my $path = sprintf '%s/%s', $dir, $req;
+
+    if(! -e $path) {
+        system "/usr/bin/mkfifo $path";
+        $o->throw("Can't make fifo: $!") if $?;
+    }
+    elsif(! -p $path) {
+        $o->throw("Invalid destination '$req', already in use.");
+    }
+
+    chmod 0666, $path;
+
+    return $path;
+  }
+
+
+  sub
+  _msg_mkfifo_fh {
+    my ($o, $name, $req) = @_;
+
+    # $o->throw("Invalid message set name '$name'.") unless $name =~ /^[-.\w]+$/;
+    $o->_assertIsValidTypeName('message set name', $name);
+    
+    # A place for message stuff to live.
+    mkpath "$o->{descDir}/.msg/$name";
+
+    my $path = $o->_msg_mkfifo($req, ".msg/$name");
+
+    return new FileHandle("< $path");
+  }
+
+
+
+  sub
+  getCommandOutput {
+    my ($o, $cmd) = @_;
+
+    my $fhi = $o->begin_Async($cmd);
+    while(($len = $o->read_Async($fhi)) > 0) { }
+    return $o->end_Async($fhi);
+  }
+
+
+
+  # These should be instance variables.
+  my @fn_Async     = ( );
+  my @fh_Async     = ( );
+  my @offest_Async = ( );
+  my @resp_Async   = ( );
+  my $nOpenConn    = 0;
+
+  my $rin  = "\0" x 2;
+  my $rout = "\0" x 2;
+  my $routAccum = '';
+
+  my $bdumpStr;
+  # These should be instance variables.
+
+  sub
+  bdump {
+    my $str = unpack("b*", $_[0]);
+    $str =~ s/0/./g;
+
+    $bdumpStr = $str unless defined $bdumpStr;
+
+    for(my $i=0; $i<length($str); ++$i) {
+        next if substr($str, $i, 1) eq substr($bdumpStr, $i, 1);
+
+        substr($str, $i, 1) = '-';
+    }
+
+    $str =~ s/^\s+//; $str =~ s/\s+$//;
+    _report([' ** % 5d ready fh: %s', $nOpenConn, $str]);
+
+    return;
+  }
+
+
+  sub
+  begin_Async {
+
+    #!!!# DO NOT EXPOSE this function as a builtin...
+    #!!!# DO NOT EXPOSE this function as a builtin...
+    #!!!# DO NOT EXPOSE this function as a builtin...
+
+    my ($o, $cmd) = @_;
+
+    my $fhi = 0;
+
+    while(defined $fh_Async[$fhi]) { ++$fhi }
+
+    my $fh = new FileHandle("$cmd |");
+    if(!defined $fh) { $o->throw("Can't invoke command '$cmd': $!") }
+
+    my $fn = fileno($fh);
+
+    vec($rin, $fn, 1) = 1;
+
+
+        $fh_Async[$fhi] = $fh;
+    $offest_Async[$fhi] = 0;
+      $resp_Async[$fhi] = '';
+
+        $fn_Async[$fn ] = $fhi;
+    ++$nOpenConn;
+
+    return $fhi;
+  }
+
+  sub
+  select_Async {
+    my ($o, $asyncList, $timeout) = @_;
+
+    return if !$nOpenConn;
+
+    # $timeout = 0 unless defined $timeout;
+    # $timeout = 1 unless defined $timeout;
+
+    $rout = $rin;
+
+    bdump $rout;
+    my $nf = select $rout, undef, undef, $timeout;
+
+    if($nf < 0) { $o->throw("Can't select(): $!") }
+    
+    $routAccum |= $rout;
+
+    my @ready = ( );
+
+    my $maxFn = 8 * length($rout);
+
+    for(my $fn=0; $fn < $maxFn; ++$fn) {
+        next unless vec($rout, $fn, 1);
+
+        push @ready, $fn_Async[$fn];
+        vec($rin, $fn, 1) = 0;
+    }
+
+    return \@ready;
+  }
+
+
+  sub
+  read_Async {
+    my ($o, $fhi) = @_;
+
+    my $fh = $fh_Async[$fhi];
+    if(eof $fh) {
+        close $fh;
+        undef  $fh_Async[$fhi];
+        return 0;
+    }
+
+    if(!defined $fh) { $o->throw("No pending command to read from for fhi $fhi") }
+
+    my $len = read($fh, $resp_Async[$fhi], 1024, $offest_Async[$fhi]);
+    $offest_Async[$fhi] += $len;
+
+    # This is where we could 'yield'
+
+
+    my $eof = eof $fh;
+    # _report("len: $len, eof: $eof");
+
+    if($eof || !$len) {
+        my $fn = fileno $fh;
+        vec($rin, $fn, 1) = 0;
+
+        undef $offset_Async[$fhi];
+        undef     $fn_Async[$fn ];
+
+        --$nOpenConn;
+    }
+
+    return $len;
+  }
+
+  sub
+  end_Async {
+    my ($o, $fhi) = @_;
+
+    my $resp = $resp_Async[$fhi];
+    undef $resp_Async[$fhi];
+
+    return $resp;
+  }
+
+#---------------------------------------------------------------
+##  New lock code (using semaphores rather than symlinks!)
+##
+##      0: update-mutex semaphore,       initialised to value of 1.
+##      1: read-lock-count semaphore,    initialised to value of 0.
+##      2: update-lock-count semaphore,  initialised to value of 0.
+##  
+##  
+##      to get a read lock
+##          semop: wait for update-lock-count semaphore to be 0.
+##          semop: increment the read-lock-count semaphore.
+##
+##      pre-read
+##          if DBM file is newer than when is was last opened,
+##              close DBM file and open DBM file readonly.
+##
+##      to read
+##          read value from open read-only DBM file.    via perl tied hash
+##
+##      to release a read lock
+##          semop: decrement the read-lock-count semaphore.
+##  
+##  
+##
+##      to get update lock
+##          semop: decrement update-mutex semaphore
+##              if value is 1 this proceeds.
+##              if value is 0 this blocks.
+##
+##          semop: increment  update-lock-count semaphore.
+##              this will block processes attempting to get a read lock.
+##
+##          if we're not waiting for readers to end,
+##              we need to make changes to a copy of the DBM file
+##              and replace the old one when we're done.
+##          else
+##              semop: wait for read-lock-count semaphore to become 0.
+##  
+##      pre-update
+##          close DBM file.
+##  
+##          if we're not waiting for readers to end,
+##              make a writable copy of the DBM file
+##          else
+##              make DBM file writable,
+##
+##          open DBM file for write
+##
+##      to update
+##          make changes (reads/writes) to open writable DBM file. via perl tied hash
+##
+##      post-update
+##          close DBM file
+##  
+##          make DBM file readonly
+##
+##          if we're not waiting for readers to end,
+##              replace old DBM file with new one.
+##
+##          open DBM file read-only.
+##  
+##      to release update lock
+##          semop: decrement update-lock-count semaphore.
+##              this allows process to obtain read lock.
+##          semop: increment update-mutex semaphore
+##              this unblock other process waiting for a update lock.
+##  
+
+
+#X# doc_Method(getMutexLock, <|
+# # $o->getMutexLock();
+# # |>, <|
+#X# |>)
+sub
+getMutexLock {
+    my ($sem) = @_;
+    # $lgr->Enter("getMutexLock()");
+
+    return $sem->op(0, -1, 0);
+}
+
+
+#X# doc_Method(releaseMutexLock, <|
+# # $o->releaseMutexLock();
+# # |>, <|
+#X# |>)
+sub
+releaseMutexLock {
+    my ($sem) = @_;
+    # $lgr->Enter("releaseMutexLock()");
+
+    return $sem->op(0, +1, 0);
+}
+
+
+#X# doc_Method(getReadLock, <|
+# # $o->getReadLock();
+# # |>, <|
+#X# |>)
+sub
+getReadLock {
+    my ($sem) = @_;
+    # $lgr->Enter("getReadLock($o)");
+
+    $sem->op( 1, +1, 0,  2, 0, 0);     # Increment reader count, wait for updaters to finish.
+
+    return;
+}
+
+
+#X# doc_Method(releaseReadLock, <|
+# # $o->releaseReadLock();
+# # |>, <|
+#X# |>)
+sub
+releaseReadLock {
+    my ($sem) = @_;
+    # $lgr->Enter("releaseReadLock($o)");
+
+    $sem->op( 1, -1, 0         );      # Decrement reader count, when zero updaters can proceed.
+
+    return;
+}
+
+
+#X# doc_Method(getUpdateLock, <|
+# # $o->getUpdateLock();
+# # |>, <|
+#X# |>)
+sub
+getUpdateLock {
+    my ($sem) = @_;
+    # $lgr->Enter("getUpdateLock()");
+
+    $sem->op(           2, +1, 0);     # Increment updater count, this blocks new readers.
+    $sem->op( 1, 0, 0,          );     # Wait for current readers to finish.
+    getMutexLock $sem;                       # Only one updater at a time!
+
+    return;
+}
+
+
+#X# doc_Method(releaseUpdateLock, <|
+# # $o->releaseUpdateLock();
+# # |>, <|
+#X# |>)
+sub
+releaseUpdateLock {
+    my ($sem) = @_;
+    # $lgr->Enter("releaseUpdateLock()");
+
+    releaseMutexLock $sem;                   # Let any other updaters through now.
+    $sem->op(          2, -1, 0);      # Decrement updater count, when zero readers can proceed.
+
+    return;
+}
+
+
+
+#X# doc_Method(initSem, <|
+# # $o->initSem($path, $proj);
+# # |>, <|
+#X# |>)
+  sub
+  initSem {
+    my ($o, $path, $proj) = @_;
+    $proj = ord '1' unless defined $proj;
+    # _report(" >> initSem($path, $proj)");
+
+    my $semKey = ftok($path, $proj);
+    # _report(['semKey: %s', $semKey]);
+
+    $sem = new IPC::Semaphore($semKey, 3, 0666);
+
+    if(!defined $sem) {
+        # _report("** ** ** **   Making a new semaphore ($path)  ** ** ** **");
+
+        $sem = new IPC::Semaphore($semKey, 3, 0666 | IPC_CREAT);
+        if(defined $sem) {
+            my $semId = $sem->id;
+            # _report("** ** ** **   Made a new semaphore  id: $semId   ** ** ** **");
+        }
+        else {
+            my $err   = $!;
+            my $errno = $! + 0;
+
+            $o->throw("Can't make semaphore object: (errno $errno) $err");
+        }
+    }
+
+    $sem->setall(1, 0, 0);
+
+    # _report(['sem: %s', $sem]);
+
+    return $sem;
+  }
+
+
+
+#X# doc_Method(deref_url, <|
+# # $o->deref_url();
+# # |>, <|
+  sub
+  deref_url {
+    my ($o, $url, $options) = @_;
+
+    # $o->throw("Unimplemented HTTP method called here.");
+
+    return unless defined $url;
+
+    my ($method, $headers, $body, $uagent, $user, $password);
+
+    my $verbose     = 0;
+    my $noserialize = 0;
+    my $deserialize = 1;
+
+    if(defined $options) {
+        $method   = uc $options->{method};
+        $headers  = $options->{headers};
+        $body     = $options->{body};
+        $uagent   = $options->{'user-agent'};
+        $user     = $options->{user};
+        $password = $options->{password};
+        $verbose  = $options->{verbose};
+        $noserialize  = $options->{noserialize} if defined $options->{noserialize};
+        $deserialize  = $options->{deserialize} if defined $options->{deserialize};
+        $useRuntimeCreds = $options->{'use-runtime-creds'};
+
+    }
+
+    if($useRuntimeCreds && !defined $user && !defined $password) {
+        $user     = $PrimaLisp::DPL_userid;
+        $password = $PrimaLisp::DPL_password;
+    }
+
+    $uagent = sprintf("DPL-%s/%s", $PrimaLisp::Version, $PrimaLisp::VDate)  unless defined $uagent;
+ 
+
+    # CLS - Command Line Switch.
+    my $headerCLS = join(' ', map { sprintf "--header '%s: %s'", $_, $headers->{$_} } keys %$headers);
+
+    my $outputCLS   =         "-o - --connect-timeout 300";
+    my $certCLS     =         "--insecure";
+    my $uagentCLS   = sprintf "--user-agent '%s'",    $uagent;
+    my $userpwdCLS  = sprintf "--user '%s:%s'",     $user, $o->unmaskData($password)     if defined $user && defined $password;
+    my $verboseCLS  = defined $verbose && $verbose? '-v': '';
+
+
+    my $clsStr = join(' ', map { defined $_? $_: '' }
+                        ($outputCLS, $certCLS, $headerCLS, $uagentCLS, $userpwdCLS, $verboseCLS));
+
+
+    $method = 'GET'  unless defined $method && $method;
+
+    my $frag = sprintf ".%6f.%d", time, $$;
+
+    my ($cmd, $resp, $respErr);
+    my $respErrFile = sprintf "/tmp/.curl.err.%s", $frag;
+
+
+    my $urlShEnc = $url;
+    # $urlShEnc =~ s/'/\\'/gs;
+    $urlShEnc =~ s/\$/\\\$/gs;
+
+
+    my $bodyCLS = '';
+    if(defined $body) {
+        my $tmpFile = sprintf "/tmp/.curl.body.%s", $frag;
+        my $fh = new FileHandle("> $tmpFile");
+        $o->throw(" Can't write tmp file '$tmpFile' for request body: $!")
+            unless defined $fh;
+
+        # Might want serialization options to have some effect here.
+        my $j = new JSON;
+        # print $fh $noserialize? $body: $j->pretty->canonical->ascii->encode($body);
+        print $fh $noserialize? $body: $j->ascii->encode($body);
+        close $fh;
+
+        $bodyCLS = "--data-binary \@$tmpFile";
+    }
+
+    $cmd = "curl $clsStr -s -S -X $method --url \"$urlShEnc\" $bodyCLS";
+
+
+    _report(" %> $cmd\n")  if $verbose;
+
+    $resp = $o->getCommandOutput("exec $cmd 2> $respErrFile");
+
+    my $rc = $?;
+
+
+    my $respErrFH = new FileHandle("< $respErrFile");
+    { local $/ = undef; $respErr = <$respErrFH>; }
+    close $respErrFH;
+
+    unlink $respErrFile unless -s $respErrFile;
+
+    if($rc) {
+        my $msg = "Request Failed ($rc):\n$resp\n$respErr";
+        _report($msg);
+
+        my $err = { msg => $msg };
+        if($respErr =~ /HTTP request sent, awaiting response... (.*?)\n/s) {
+            my $st = $1;
+            $err->{status} = $st;
+
+            if($st =~ /^(\d+)/) {
+                $err->{code} = $1;  
+            }
+        }
+        $o->throw($err);
+    }
+
+    if($deserialize && $resp ne '') {
+        my $j = new JSON;
+        $resp = $j->decode($resp);
+    }
+
+    return $resp;
+  }
+
+
+
+  sub
+  __recurs_get_first_expr {
+    my ($names, $list) = @_;
+    return unless ref $list eq 'ARRAY';
+    return unless @$list;
+
+    my $name = shift @$list;
+
+    if($name eq 'fn') {
+        shift @$list;
+    }
+    elsif($name eq 'def-fn' || $name eq 'def-macro') {
+        shift @$list;
+        shift @$list;
+    }
+
+    $names->{$name} = 1
+        if $name && !ref $name;
+
+    if($name =~ /^\$/) {
+        delete $names->{$name};
+
+        my $name2 = shift @$list;
+
+        $names->{"$name $name2"} = 1
+            if $name2 && !ref $name2;
+    }
+
+    map { __recurs_get_first_expr($names, $_) } @$list;
+  }
+
+  sub
+  recurs_deep_join {
+    my ($o, $items, $jstr) = @_;
+
+    return join($jstr, map {
+           if(!defined $_       ) { ''                       }
+        elsif(!ref $_           ) { $_                       }
+        elsif( ref $_ eq 'ARRAY') { $o->recurs_deep_join($_, $jstr) }
+        else {
+            my $cs = $o->eval('(desc-to-string (callstack))', {});
+            _report(['Unexpected item here (%s) -- %s', $_, $cs]);
+            ''
+        }
+    } @$items);
+  }
+
+#------------------------------------------------------------------------------------
+
+# mask/unmask is simply a way to store and use sensitive data,
+# without having to store it in mem or leak it in logs or serialzations, etc.
+
+  sub
+  maskData {
+    my ($o, $data) = @_;
+
+    my $bi    = $o->{builtinsMap};
+    my $otp   = $bi->{'rand-data'}->($o, [length $data]);
+    my $parts = $bi->{'shuffle-list'}->($o, [ [ $otp, $data ^ $otp ] ]);
+
+    [ encode_base64($parts->[0]), encode_base64($parts->[1]) ];
+  }
+
+  sub
+  unmaskData {
+    my ($o, $data) = @_;
+
+    return $data if !ref $data;
+
+    decode_base64($data->[0]) ^ decode_base64($data->[1]);
+  }
+
+
+  sub
+  encryptData {
+    my ($o, $key, $data) = @_;
+
+    my $bi = $o->{builtinsMap};
+    $data = $bi->{'desc-to-string'}->($o, [$data, {compact => 1}]);
+    $data = $bi->{gzip}->($o, [$data]);
+    $data = $bi->{encrypt}->($o, [$o->unmaskData($key), $data]);
+
+    return $data;
+  }
+
+  sub
+  decryptData {
+    my ($o, $key, $data) = @_;
+
+    my $bi = $o->{builtinsMap};
+    $data = $bi->{decrypt}->($o, [$o->unmaskData($key), $data]);
+    $data = $bi->{gunzip}->($o, [$data]);
+    $data = $bi->{'desc-from-string'}->($o, [$data]);
+
+    return $data;
+  }
+
+  sub
+  setDBM { 
+    my ($o, $dbmName, $token, $data) = @_;
+
+    my $code_set  = '(var-push data $_data) (atomic ,$_dbmName {} (hash-set (dbm-open ,$_dbmName {mode rw}) / ,$token $data) (dbm-close ,$_dbmName)) (var-pop data)';
+
+    my $ti = $o->{topInterp};
+    $ti->{__lock_ok_name__} = $ti->{__dbm_ok_name__}  = $dbmName;
+    $ti->evalAll($code_set, {_dbmName => $dbmName, token => $token, _data => $data});
+    delete $ti->{__lock_ok_name__};
+    delete $ti->{__dbm_ok_name__};
+    
+    return;
+  }
+    
+  sub
+  getDBM {
+    my ($o, $dbmName, $token) = @_;
+
+    my $code_get   = '(atomic ,$_dbmName {} (var-push val (hash-get (dbm-open ,$_dbmName {mode rw}) / ,$token)) (dbm-close ,$_dbmName) (var-pop val))';
+
+    my $ti = $o->{topInterp};
+    $ti->{__lock_ok_name__} = $ti->{__dbm_ok_name__}  = $dbmName;
+    my $data = $ti->evalAll($code_get, {_dbmName => $dbmName, token => $token});
+    delete $ti->{__lock_ok_name__};
+    delete $ti->{__dbm_ok_name__};
+
+    return $data;
+  }
+
+  sub
+  clearDBM {
+    my ($o, $dbmName, $token) = @_;
+
+    my $code_clear = '(atomic ,$_dbmName {} (hash-clear (dbm-open ,$_dbmName {mode rw}) / ,$token) (dbm-close ,$_dbmName))';
+
+    my $ti = $o->{topInterp};
+    $ti->{__lock_ok_name__} = $ti->{__dbm_ok_name__}  = $dbmName;
+    $ti->evalAll($code_clear, {_dbmName => $dbmName, token => $token});
+    delete $ti->{__lock_ok_name__};
+    delete $ti->{__dbm_ok_name__};
+
+    return;
+  }
+
+  sub
+  openTopDBM {
+    my ($o, $dbmName, $mode) = @_;
+
+    return $o->openDBM("$o->{topDescDir}/$dbmName", $mode);
+  }
+
+  sub
+  openDBM {
+    my ($o, $dbmPath, $mode) = @_;
+
+    # TODO if mode == 0666 get a lock!
+
+    my $oUmask = umask();
+    umask(002);
+    my $rc = dbmopen %$dbm, $dbmPath, $mode;
+    umask($oUmask);
+
+    return if !defined $rc && $mode == 0444;
+
+    unless(defined $rc) {
+        _report(['dbmopen rc: %s, err: %s', $rc, $!]);
+        $o->throw("openDBM(): dbm-open not opening...");
+    }
+    undef $rc;
+
+    return $dbm;
+  }
+
+  sub
+  closeDBM {
+    my ($o, $dbm) = @_;
+
+    dbmclose %$dbm;
+  }
+
+}
+
+#------------------------------------------------------------------------------------
+
+sub
+cnvt_date_to_time {
+    my ($timeStr, $tz) = @_;
+
+    # _report(" >> cnvt_date_to_time($timeStr)");
+
+    # Just return it if it's already a timestamp.
+    # perl -e 'map { printf "%d % 10d: %s\n", $_, 10**$_-1, scalar localtime (10**$_-1) } (9,8,7,6)'
+    # 9  999999999: Sat Sep  8 21:46:39 2001
+    # 8   99999999: Sat Mar  3 04:46:39 1973
+    # 7    9999999: Sun Apr 26 13:46:39 1970
+    if($timeStr =~ /^\d{7,10}$/) { return $timeStr }
+
+    # if(defined $tz) { $timeStr = sprintf('%s %s', $timeStr, uc($tz)) }
+
+    my $timeVal = str2time($timeStr);
+    return $timeVal if defined $timeVal;
+
+
+    # Fix up date string and try again...
+    # print STDERR " -- 1. Converting '$timeStr' to time\n";
+
+
+    ### Try dealing with AM/PM indicator.
+    #                     1        2      3         4
+    if($timeStr =~ /(\d{1,2})(:\d{2}(:\d{2})?)(am|pm)/i) {
+        my ($hour, $mid, $ampm) = ($1, $2, $4);
+
+        if($ampm =~ /pm/i) { $hour += 12 }
+
+        my $str = sprintf "%d%s", $hour, $mid;
+        $timeStr =~ s/(\d{1,2})(:\d{2}(:\d{2})?)(am|pm)/$str/i;
+    }
+
+
+    # English?? or is it POSIX?
+    $timeStr =~   s/january\s+(\d+),/$1 Jan/i;
+    $timeStr =~  s/february\s+(\d+),/$1 Feb/i;
+    $timeStr =~     s/march\s+(\d+),/$1 Mar/i;
+    $timeStr =~     s/april\s+(\d+),/$1 Apr/i;
+    $timeStr =~       s/may\s+(\d+),/$1 May/i;
+    $timeStr =~      s/june\s+(\d+),/$1 Jun/i;
+    $timeStr =~      s/july\s+(\d+),/$1 Jul/i;
+    $timeStr =~    s/august\s+(\d+),/$1 Aug/i;
+    $timeStr =~ s/september\s+(\d+),/$1 Sep/i;
+    $timeStr =~   s/october\s+(\d+),/$1 Oct/i;
+    $timeStr =~  s/november\s+(\d+),/$1 Nov/i;
+    $timeStr =~  s/december\s+(\d+),/$1 Dec/i;
+    # English?? or is it POSIX?
+
+
+    if(0) {
+        $timeStr =~ s/(\d{1,2}:\d{2})\s/$1:00 /;
+    }
+
+    ## Fixup timezone spec.
+    $timeStr =~ s/GMT-(\d+):(\d+)/-$1$2/;
+
+
+    # print STDERR " -- 2. Converting '$timeStr' to time\n";
+
+    $timeVal = str2time($timeStr);
+
+    if(!defined $timeVal) { _report(" !! Couldn't convert '$timeStr' to time") }
+
+    return $timeVal;
+}
+
+
+sub
+cnvt_time_to_iso_8601_date {
+    my ($t) = @_;
+
+    # http://en.wikipedia.org/wiki/ISO_8601
+
+    #  0    1    2     3     4    5     6     7     8
+    ($sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst) = gmtime($t);
+    return sprintf '%04d-%02d-%02dT%02d:%02d:%02dZ', 1900+$year, 1+$mon, $mday, $hour, $min, $sec;
+
+}
+
+#------------------------------------------------------------------------------------
+
+sub
+_var_set_simple {
+    my ($o, $args) = @_;
+
+    # _report([' >> _var_set_simple(%s)', $args->[0]]);
+
+    $o->throw("Expected a var name to be defined here.")
+        unless defined $args->[0];
+
+    my $capture = $o->{_var_capture_info};
+    $capture = $o->{varMapNS}
+        unless defined $capture;
+
+    my $stack = $capture->{$args->[0]};
+    if(!defined $stack) {
+        $stack = [ ];
+        $capture->{$args->[0]} = $stack;
+    }
+    $stack->[0] = $args->[1];
+
+    return $args->[1];
+}
+
+#------------------------------------------------------------------------------------
+
+# Handle version skew between wget 1.10.2 on srvdevlnx01 and wget 1.12 on dev-dpl-01
+# wrt whether --auth-no=challenge is ok or not...
+# e.g. dev-dpl-01 needs it, srvdevlnx01 doesn't understand it.
+
+my $wgetExtraCLS;
+
+sub
+_wget_args_check {
+    return if defined $wgetExtraCLS;
+
+    my $cmd = "wget --version";
+    my @lines = split /\n+/, `$cmd`;
+    my $vLine = shift @lines;
+    if($vLine =~ /GNU Wget ([\d.]+)/) {
+        $wgetExtraCLS = $1 le '1.10.2'? '': '--auth-no-challenge';
+    }
+}
+
+_wget_args_check;
+
+
+
+#------------------------------------------------------------------------------------
+
+sub _assertIsValidTypeName { PrimaLisp::_assertIsValidTypeName @_ }
+
+#------------------------------------------------------------------------------------
+
+# Return the core builtin functions.
+{
+
+
+    # Arithmetic, etc.
+    '+' => sub { my ($o, $args) = @_; my $v = shift @$args; map { $v += $_ } @$args; $v },
+    '-' => sub { my ($o, $args) = @_; my $v = shift @$args; map { $v -= $_ } @$args; $v },
+    '×' => sub { my ($o, $args) = @_; my $v = 1;            map { $v *= $_ } @$args; $v },
+    '÷' => sub { my ($o, $args) = @_; my $v = shift @$args; map { $v /= $_ } @$args; $v },
+
+    '%'   => sub { my ($o, $args) = @_;   $args->[0]  % $args->[1] },
+    '..'  => sub { my ($o, $args) = @_; [ $args->[0] .. $args->[1] ] },
+
+    '<'   => sub { my ($o, $args) = @_; while(@$args >= 2 && $args->[0]  < $args->[1]) { shift @$args } return @$args == 1? 1: 0 },
+    '>'   => sub { my ($o, $args) = @_; while(@$args >= 2 && $args->[0]  > $args->[1]) { shift @$args } return @$args == 1? 1: 0 },
+    '<='  => sub { my ($o, $args) = @_; while(@$args >= 2 && $args->[0] <= $args->[1]) { shift @$args } return @$args == 1? 1: 0 },
+    '>='  => sub { my ($o, $args) = @_; while(@$args >= 2 && $args->[0] >= $args->[1]) { shift @$args } return @$args == 1? 1: 0 },
+    '=='  => sub { my ($o, $args) = @_; while(@$args >= 2 && $args->[0] == $args->[1]) { shift @$args } return @$args == 1? 1: 0 },
+    '!='  => sub { my ($o, $args) = @_; while(@$args >= 2 && $args->[0] != $args->[1]) { shift @$args } return @$args == 1? 1: 0 },
+    '<=>' => sub { my ($o, $args) = @_; $args->[0] <=> $args->[1] },
+
+    'lt'  => sub { my ($o, $args) = @_; while(@$args >= 2 && $args->[0] lt $args->[1]) { shift @$args } return @$args == 1? 1: 0 },
+    'gt'  => sub { my ($o, $args) = @_; while(@$args >= 2 && $args->[0] gt $args->[1]) { shift @$args } return @$args == 1? 1: 0 },
+    'le'  => sub { my ($o, $args) = @_; while(@$args >= 2 && $args->[0] le $args->[1]) { shift @$args } return @$args == 1? 1: 0 },
+    'ge'  => sub { my ($o, $args) = @_; while(@$args >= 2 && $args->[0] ge $args->[1]) { shift @$args } return @$args == 1? 1: 0 },
+    'eq'  => sub { my ($o, $args) = @_; while(@$args >= 2 && $args->[0] eq $args->[1]) { shift @$args } return @$args == 1? 1: 0 },
+    'ne'  => sub { my ($o, $args) = @_; while(@$args >= 2 && $args->[0] ne $args->[1]) { shift @$args } return @$args == 1? 1: 0 },
+    'cmp' => sub { my ($o, $args) = @_; $args->[0] cmp $args->[1] },
+
+    '!'  => sub { my ($o, $args) = @_; !$args->[0] },
+
+    #  && is true  if all its args are  true, and false otherwise.
+    '&&/ismacro' => 1,
+    '&&' => sub {
+        my ($o, $args) = @_; 
+
+        if(ref $args->[0] eq 'ARRAY') { $args = $args->[0] }
+
+        my $env = { };
+        if(my $val = $o->eval(shift(@$args), $env)) {
+            while(@$args &&  ($val = $o->eval($args->[0], $env)) ) { shift @$args }
+
+            return @$args? 0: $val;
+        }
+        return 0;
+    },
+
+    #  || is false if all its args are false, and true  otherwise.
+    '||/ismacro' => 1,
+    '||' => sub {
+        my ($o, $args) = @_;
+
+        if(ref $args->[0] eq 'ARRAY') { $args = $args->[0] }
+
+        my $env = { };
+        my $val;
+        if(!($val = $o->eval(shift(@$args), $env))) {
+            while(@$args && !($val = $o->eval($args->[0], $env)) ) { shift @$args }
+
+            return @$args? $val: 0;
+        }
+        return $val;
+    },
+
+    '~'  => sub { my ($o, $args) = @_; ~$args->[0] },
+    '^'  => sub { my ($o, $args) = @_; $args->[0] ^ $args->[1] },
+    '&'  => sub { my ($o, $args) = @_; while(@$args >= 2 && $args->[0] & $args->[1]) { shift @$args } return @$args == 1? 1: 0 },
+    '|'  => sub { my ($o, $args) = @_; while(@$args >= 2 && $args->[0] | $args->[1]) { shift @$args } return @$args == 1? 1: 0 },
+
+    '>>' => sub { my ($o, $args) = @_; $args->[0] >> $args->[1] },
+    '<<' => sub { my ($o, $args) = @_; $args->[0] << $args->[1] },
+
+    'sqrt' => sub { my ($o, $args) = @_; sqrt $args->[0] },
+    'sin' => sub { my ($o, $args) = @_; sin $args->[0] },
+    'cos' => sub { my ($o, $args) = @_; cos $args->[0] },
+    'tan' => sub { my ($o, $args) = @_; tan $args->[0] },
+
+    'log' => sub { my ($o, $args) = @_; log $args->[0] },
+    'exp' => sub { my ($o, $args) = @_; exp $args->[0] },
+
+    'abs' => sub { my ($o, $args) = @_; abs $args->[0] },
+    'int' => sub { my ($o, $args) = @_; int $args->[0] },
+
+    'srand' => sub { my ($o, $args) = @_; srand $args->[0] },
+    'rand'  => sub { my ($o, $args) = @_; scalar(@$args)? rand($args->[0]): rand() },
+
+    'min' => sub { my ($o, $args) = @_; my $v; map { $v = $_ if !defined $v || $v > $_ } ref $args->[0] eq 'ARRAY'? @{$args->[0]}: @$args; $v},
+    'max' => sub { my ($o, $args) = @_; my $v; map { $v = $_ if !defined $v || $v < $_ } ref $args->[0] eq 'ARRAY'? @{$args->[0]}: @$args; $v},
+
+    'τ' => sub { 4*atan2(1,0) },
+    'π' => sub { 2*atan2(1,0) },
+
+    '**' => sub { my ($o, $args) = @_; exp(log($args->[0]) * $args->[1]) },
+
+    '+/usage' => "(+ -arg- ...) : Returns the sum of its arguments. arg1 + arg2 + ... + argN.",
+    '-/usage' => "(- -arg- ...) : Returns the subtraction of its arguments. arg1 - arg2 - ... - argN.",
+    '×/usage' => "(× -arg- ...) : Returns the product of its arguments. arg1 × arg2 × ... × argN.",
+    '÷/usage' => "(÷ -arg- ...) : Returns the division of its arguments. arg1 ÷ arg2 ÷ ... ÷ argN.",
+    '*/usage' => "(* -arg- ...) : Returns the product of its arguments. arg1 * arg2 * ... * argN. An alias for ×",
+    '//usage' => "(/ -arg- ...) : Returns the division of its arguments. arg1 / arg2 / ... / argN. An alias for ÷",
+
+    '%/usage'   => "(% -x- -y-) : Returns -x- mod -y-.",
+    '../usage'  => "(.. -i- -j-) : Returns list of values between -i- and -j-.",
+
+    '</usage'  =>  "(< -x- -y- ...) : (numeric) Returns true if arg1 < arg2 < ... < argN.",
+    '>/usage'  =>  "(> -x- -y- ...) : (numeric) Returns true if arg1 > arg2 > ... > argN.",
+    '<=/usage' => "(<= -x- -y- ...) : (numeric) Returns true if arg1 <= arg2 <= ... <= argN.",
+    '>=/usage' => "(>= -x- -y- ...) : (numeric) Returns true if arg1 >= arg2 >= ... >= argN.",
+    '==/usage' => "(== -x- -y- ...) : (numeric) Returns true if arg1 == arg2 == ... == argN.",
+    '!=/usage' => "(!= -x- -y- ...) : (numeric) Returns true if arg1 != arg2 != ... != argN.",
+    '<=>/usage' =>   "(<=> -x- -y-) : (numeric) Returns -1, 0 or +1 to indicate relative ordering of args.",
+
+    'lt/usage' => "(lt -x- -y- ...) : (string) Returns true if arg1 > arg2 > ... > argN.",
+    'gt/usage' => "(gt -x- -y- ...) : (string) Returns true if arg1 < arg2 < ... < argN.",
+    'le/usage' => "(le -x- -y- ...) : (string) Returns true if arg1 <= arg2 <= ... <= argN.",
+    'ge/usage' => "(ge -x- -y- ...) : (string) Returns true if arg1 >= arg2 >= ... >= argN.",
+    'eq/usage' => "(eq -x- -y- ...) : (string) Returns true if arg1 == arg2 == ... == argN.",
+    'ne/usage' => "(ne -x- -y- ...) : (string) Returns true if arg1 != arg2 != ... != argN.",
+    'cmp/usage' =>   "(cmp -x- -y-) : (string) Returns -1, 0 or +1 to indicate relative ordering of args.",
+
+    '!/usage'  =>      "(! -expr-) : Returns logical NOT of -expr-.",
+    '&&/usage' => "(&& -expr- ...) : Returns logical AND of its args.",
+    '||/usage' => "(|| -expr- ...) : Returns logical OR of its args.",
+
+    '~/usage' =>     "(~ -expr-) : Returns bitwise NOT of -expr-.",
+    '&/usage' => "(& -expr- ...) : Returns bitwise AND of its args.",
+    '|/usage' => "(| -expr- ...) : Returns bitwise OR of its args.",
+
+    '>>/usage' => "(>> -expr- -n-) : Returns bits of -expr- shifted -n- bits to least significant end.",
+    '<</usage' => "(<< -expr- -n-) : Returns bits of -expr- shifted -n- bits to most significant end.",
+
+    'sqrt/usage' => "(sqrt -expr-) : Returns the square root of -expr-.",
+    'sin/usage' =>   "(sin -expr-) : Returns sine of -expr- (in radians).",
+    'cos/usage' =>   "(cos -expr-) : Returns cosine of -expr- (in radians).",
+    'tan/usage' =>   "(tan -expr-) : Returns tangent of -expr- (in radians).",
+
+    'log/usage' =>   "(log -expr-) : Returns natural logarithm of -expr-.",
+    'exp/usage' =>   "(exp -expr-) : Returns e to the power of -expr-.",
+
+    'abs/usage' =>   "(abs -expr-) : Returns the absolute value of -expr-.",
+    'int/usage' =>   "(int -expr-) : Returns the integer value of -expr-.",
+
+    'rand/usage' =>   "(rand -expr-) : Returns pseudo-random number between 0 and 1, or optional -expr-.",
+    'srand/usage' =>   "(srand -seed-) : Seed PRNG with value -seed-.",
+
+    'min/usage' => '(min ...) : Return the minimum value.',
+    'max/usage' => '(max ...) : Return the maximum value.',
+
+    'τ/usage' =>   "(τ) : Ratio of circle's circumference to its radius.",
+    'π/usage'  =>   "(π) : Ratio of circle's circumference to its diameter. (τ/2).",
+
+    '**/usage' => "(** -base- -exponent-) : Returns -base- to the power of -exponent-.",
+
+    #------------------------------------------------------------------------------------------
+
+    'mean-arith/usage' => '(mean-arith -list-) : Return arithmatic mean of input list of numbers.',
+    'mean-arith' => sub {
+        my ($o, $args) = @_;
+        if(ref $args->[0] eq 'ARRAY') { $args = $args->[0] }
+        return 0 unless @$args;
+
+        my $argscc = 0;
+        map { $argscc += $_ } @$args;
+        return $argscc/@$args;
+    },
+
+    'mean-geom/usage' => '(mean-geom -list-) : Return geometric mean of input list of numbers.',
+    'mean-geom' => sub {
+        my ($o, $args) = @_;
+        if(ref $args->[0] eq 'ARRAY') { $args = $args->[0] }
+        return 0 unless @$args;
+
+        my $argscc = 1;
+        my $n   = 0;
+
+        map { if($_ > 0) { ++$n; $argscc *= $_ } } @$args;
+        return 0 unless $n;
+
+        return exp(log($argscc)/$n);
+    },
+
+
+    #------------------------------------------------------------------------------------------
+
+    # Increment/Decrement
+
+    '_++/usage' => '(_++ -var-name- ...) : Increment -var-name-, return the value after incrementing  (var++).',
+    '_++' => sub {
+        my ($o, $args) = @_;
+        return         $o->{varMapNS}->{$args->[0]}->[0]++  if @$args == 1;
+        return [ map { $o->{varMapNS}->{$_->[0]}->[0]++ } @$args ];
+    },
+
+    '++_/usage' => '(++_ -var-name- ...) : Increment -var-name-, return the value before incrementing  (++var).',
+    '++_' => sub {
+        my ($o, $args) = @_;
+        return         ++$o->{varMapNS}->{$args->[0]}->[0]  if @$args == 1;
+        return [ map { ++$o->{varMapNS}->{$_->[0]}->[0] } @$args ];
+    },
+
+    '_--/usage' => '(_-- -var-name- ...) : Decrement -var-name-, return the value after decrementing  (var--).',
+    '_--' => sub {
+        my ($o, $args) = @_;
+        return         $o->{varMapNS}->{$args->[0]}->[0]--  if @$args == 1;
+        return [ map { $o->{varMapNS}->{$_->[0]}->[0]-- } @$args ];
+    },
+
+    '--_/usage' => '(--_ -var-name- ...) : Decrement -var-name-, return the value before decrementing  (--var).',
+    '--_' => sub {
+        my ($o, $args) = @_;
+        return         --$o->{varMapNS}->{$args->[0]}->[0]  if @$args == 1;
+        return [ map { --$o->{varMapNS}->{$_->[0]}->[0] } @$args ];
+    },
+
+    #------------------------------------------------------------------------------------------
+
+    'twurler/usage' => '(twurler -n-) : Run a twurler for -n- seconds.',
+    'twurler' => sub {
+        my ($o, $args) = @_;
+        my $n = $args->[0];
+        $n = 5 unless defined $n;
+        while($n--) { map { print STDERR "  $_  \r"; select undef, undef, undef, 0.15 } ('|', '/', '-', '\\') }
+        return;
+    },
+
+    'perl-eval/usage' => '(perl-eval -expr- -env-) : Evaluate -expr- as Perl code, returning its value.',
+    'perl-eval' => sub {
+        my ($o, $args) = @_;
+        my ($expr, $env) = @$args;
+
+        my $envCode = '';
+        $envCode = join("\n", map { sprintf 'local $%s = $env->{%s};', $_, $_ } keys %$env)
+            if defined $env;
+
+        my $code = $envCode . $args->[0];
+        my $val = eval $code;
+        if($@) { $o->throw($@) }
+        return $val;
+    },
+
+    #------------------------------------------------------------------------------------------
+
+    'do/usage' => "(do -expr- ...) : Evaluate -expr- ..., return last value.",
+    #  Why is this a macro??
+    'do/ismacro' => 1,
+    #  Why is this a macro??
+    'do' => sub {
+        my ($o, $args) = @_;
+        my $value;
+        my $env = { };
+        map { $value = $o->eval($_, $env) } @$args;
+        return $value;
+    },
+
+    'expr/usage' => "(expr -expr-) : Return -expr- as a string.",
+    'expr/ismacro' => 1,
+    'expr' => sub {
+        my ($o, $args) = @_;
+        # print STDERR " >> expr($o, $args)\n";
+        return join("\n", @$args);
+    },
+
+    'eval/usage' => "(eval -expr-) : Evaluate -expr-, return its value.",
+    'eval' => sub {
+        my ($o, $args) = @_;
+        # print STDERR " >> eval($o, $args)\n";
+        return $o->eval(@$args);
+    },
+
+    'eval-all/usage' => "(eval-all -expr- ...) : Evaluate all -expr-, return last value.",
+    'eval-all' => sub {
+        my ($o, $args) = @_;
+        # print STDERR " >> eval-all($o, $args)\n";
+        return $o->evalAll(@$args);
+    },
+
+
+    #------------------------------------------------------------------------------------------
+    # Boolean predicates
+
+    'utf8?/usage' => "(utf8? -expr-) : Returns true (i.e. 1) if -expr- is a UTF-8 encoded string; false (0) if not.",
+    'utf8?' => sub {
+        my ($o, $args) = @_;
+        # print STDERR " >> sym?($o, $args)\n";
+        if(@$args) { return utf8::is_utf8($args->[0])? JSON::true: JSON::false }
+        return;
+    },
+
+    'string?/usage' => "(string? -expr-) : Returns true (i.e. 1) if -expr- is a String; false (0) if not.",
+    'string?' => sub {
+        my ($o, $args) = @_;
+        # print STDERR " >> string?($o, $args)\n";
+        if(@$args) { return defined $args->[0] && ref $args->[0] eq ''? JSON::true: JSON::false }
+        return;
+    },
+
+    'sym?/usage' => "(sym? -expr-) : Returns true (i.e. 1) if -expr- is a Symbol; false (0) if not.",
+    'sym?' => sub {
+        my ($o, $args) = @_;
+        # print STDERR " >> sym?($o, $args)\n";
+        if(@$args) { return ref $args->[0] eq 'SCALAR'? JSON::true: JSON::false }
+        return;
+    },
+
+    'hash?/usage' => "(hash? -expr-) : Returns true (i.e. 1) if -expr- is a hash (Map); false (0) if not.",
+    'hash?' => sub {
+        my ($o, $args) = @_;
+        # print STDERR " >> hash?($o, $args)\n";
+        if(@$args) { return ref $args->[0] eq 'HASH'? JSON::true: JSON::false }
+        return;
+    },
+
+    'list?/usage' => "(list? -expr-) : Returns true (i.e. 1) if -expr- is a List; false (0) if not.",
+    'list?' => sub {
+        my ($o, $args) = @_;
+        # print STDERR " >> list?($o, $args)\n";
+        if(@$args) { return ref $args->[0] eq 'ARRAY'? JSON::true: JSON::false }
+        return;
+    },
+
+    'undef?/usage' => "(undef? -expr-) : Returns true (i.e. 1) if -expr- is undefined; false (0) if not.",
+    'undef?' => sub {
+        my ($o, $args) = @_;
+        # print STDERR " >> undef?($o, $args)\n";
+        if(@$args) { return defined $args->[0]? JSON::false: JSON::true }
+        return;
+    },
+
+    'fn?/usage' => "(fn? -expr-) : Returns true (i.e. 1) if -expr- is a lambda expression; false (0) if not.",
+    'fn?' => sub {
+        my ($o, $args) = @_;
+        # print STDERR " >> undef?($o, $args)\n";
+        if(@$args) {
+            my $expr = $args->[0];
+
+            return unless defined $expr;
+
+            # If we can't parse it, it can't be a lambda expression...
+            my $parsed;
+            eval { $parsed = $o->eval('(parse ,$expr)', { expr => $expr }) };
+            if($@ || !$parsed) { return JSON::false }
+
+            # if it wasn't a function call...
+            if(ref $parsed ne 'ARRAY') { return JSON::false }
+
+            # just in case...
+            my $arg = $parsed->[0];
+            if(!defined $arg) { return JSON::false }
+
+            # and if it's not one of these...
+            if($arg ne 'fn' && $arg ne 'lambda' && $arg ne 'λ') { return JSON::false }
+
+            # (we'll say) it's a lambda expression!
+            # to be sure we could see if it evals to itself...
+
+            return JSON::true;
+        }
+        return;
+    },
+
+    'defined?/usage' => "(defined? -expr-) : Returns true (i.e. 1) if -expr- is defined; false (0) if not.",
+    'defined?' => sub {
+        my ($o, $args) = @_;
+        # print STDERR " >> defined?($o, $args)\n";
+        if(@$args) { return defined $args->[0]? JSON::true: JSON::false }
+        return;
+    },
+
+    'defined&&0?/usage' => "(defined&&0? -expr-) : Returns true (i.e. 1) if -expr- is both defined and false; false (0) otherwise.",
+    'defined&&0?' => sub {
+        my ($o, $args) = @_;
+        # print STDERR " >> defined&&0?($o, $args)\n";
+        if(@$args) { return defined $args->[0] && !$args->[0]? JSON::true: JSON::false }
+        return;
+    },
+
+    'defined&&1?/usage' => "(defined&&1? -expr-) : Returns true (i.e. 1) if -expr- is both defined and true; false (0) otherwise.",
+    'defined&&1?' => sub {
+        my ($o, $args) = @_;
+        # print STDERR " >> defined&&1?($o, $args)\n";
+        if(@$args) { return defined $args->[0] && $args->[0]? JSON::true: JSON::false }
+        return;
+    },
+
+    'macro?/usage' => "(macro? -expr-) : Returns true (i.e. 1) if -expr- is a macro; false (0) if not.",
+    'macro?' => sub {
+        my ($o, $args) = @_;
+        # print STDERR " >> list?($o, $args)\n";
+        my ($fn) = @$args;
+
+        my $attr = "$fn/ismacro";
+        my $vars = $o->{varMapNS};
+        my $bi   = $o->{builtinsMap};
+
+        return
+          ((exists($vars->{$attr}) && defined $vars->{$attr}->[0] && $vars->{$attr}->[0] eq '1' ) ||
+          (exists($bi  ->{$attr}) && defined $bi  ->{$attr}      && $bi  ->{$attr}      eq '1' )) ? JSON::true : JSON::false;
+    },
+
+    #------------------------------------------------------------------------------------------
+
+    'lc/usage' => "(lc -str-) : Returns lower case form of -str-.",
+    'lc' => sub { my ($o, $args) = @_; lc $args->[0] },
+
+    'uc/usage' => "(uc -str-) : Returns upper case form of -str-.",
+    'uc' => sub { my ($o, $args) = @_; uc $args->[0] },
+
+    'lcfirst/usage' => "(lcfirst -str-) : Returns first char lower case form of -str-.",
+    'lcfirst' => sub { my ($o, $args) = @_; lcfirst $args->[0] },
+
+    'ucfirst/usage' => "(ucfirst -str-) : Returns first char upper case form of -str-.",
+    'ucfirst' => sub { my ($o, $args) = @_; ucfirst $args->[0] },
+
+    #------------------------------------------------------------------------------------------
+
+    'go/usage' => "(go -expr- ...) : Start a new thread to run -expr-, return thread id...",
+    'go/ismacro' => 1,
+    'go' => sub {
+        my ($o, $args) = @_;
+
+        # _report(' >> (go ...)');
+
+        $o->throw(" ##  $PrimaLisp::NoThreadsConfigMesg ## ")
+          unless $PrimaLisp::GetThreadIdFn;
+
+        my $code = <<FINI; 
+          use threads;
+          threads->new(sub {
+            my (\$o, \$args) = \@_;
+            # _report("thread starting...\\n");
+            my \$value;
+            # _report("thread evaling...\\n");
+            map {
+                # _report([ 'expr: %s', \$_ ]);
+                eval { \$value = \$o->eval(\$_, { _ => \$_ }) };
+                if(\$\@) { _report(['Exception: %s', \$\@->{'exception'}]) }
+                undef
+            } \@\$args;
+            # _report(["thread returning %s (%s)\\n", \$value, join(',', \@\$value)]);
+            return \$value;
+          }, \$o, \$args)
+FINI
+        # _report("code: $code");
+        my $thr = eval $code;
+
+        if($@) { $o->throw($@) }
+        return unless defined $thr;
+
+        my $tid = $thr->tid;
+        $o->{ithreadMap}->{$tid} = $thr;
+        return $tid;
+    },
+
+    'get/usage' => "(get -expr- ...) : Wait for and return returned value from named or any threads.",
+    'get' => sub {
+        my ($o, $args) = @_;
+        my ($tid) = @$args;
+        my $thr = $o->{ithreadMap}->{$tid};
+
+        $o->throw("No such thread '$tid'")
+            unless defined $thr;
+
+        delete $o->{ithreadMap}->{$tid};
+        return $thr->join;
+    },
+
+#-------------------
+
+    '0-lock-acquire/usage' => '(lock-acquire -name- -token-var- [-options-]) : Acquire lock -name-.',
+    '0-lock-acquire' =>  sub {
+        my ($o, $args) = @_;
+
+        my $name     = shift @$args;
+        my $tokenVar = shift @$args;
+
+        # $o->throw("Invalid lock name '$name'")     unless $name     =~ /^[-\.:\w]+$/;
+        $o->_assertIsValidTypeName('lock name', $name);
+
+        # $o->throw("Invalid token var '$tokenVar'") unless $tokenVar =~ /^[-\.:\w]+$/;
+        $o->_assertIsValidTypeName('token var 1', $tokenVar);
+
+        my $options = shift @$args;
+
+        my $dir = $o->{descDir};
+        $dir = '/dev/shm' if -d '/dev/shm' && -w _;
+
+        my $lockFile = sprintf '%s/.dpl-lock-sem-%s', $dir, $name;
+        if(! -f $lockFile) {
+            my $fh = new FileHandle("> $lockFile");
+            if(defined $fh) { close $fh }
+            else            { $o->throw("Can't touch lock file '$lockFile'") }
+        }
+
+        my $acquired = 0;
+
+        # .................
+
+        my $sem = $o->{'lock-semaph'};
+        if(!defined $sem) {
+            $sem = $o->initSem($lockFile);
+            $o->throw("Can't init semaphore.")
+                unless defined $sem;
+
+            $o->{'lock-semaph'} = $sem;
+        }
+
+        PrimaLisp::getMutexLock($sem);
+        $acquired = time;
+
+        # .................
+
+        # if($acquired > 0) {
+
+            my $token = \$acquired;
+
+            $o->throw("Just checked and there already was a token goin' on here!")
+                if exists $LockTokenMap{scalar($token)};
+
+            $LockTokenMap{scalar($token)} = $name;
+
+            $o->{varMapNS}->{$tokenVar}->[0] = $token;
+        # }
+        
+        # return $acquired > 0? 1: 0;
+
+        return 1;
+    },
+
+    '0-lock-release/usage' => '(lock-release -token-var-) : Release lock indicated by -token-.',
+    '0-lock-release' =>  sub {
+        my ($o, $args) = @_;
+
+        my $tokenVar = shift @$args;
+        # $o->throw("Invalid lock token var") unless $tokenVar =~ /^[-\.:\w]+$/;
+        $o->_assertIsValidTypeName('token var 2', $tokenVar);
+
+        # my $token = $o->eval("\$$tokenVar", { });
+          my $token = $o->{varMapNS}->{$tokenVar}->[0];
+
+        $o->throw("Invalid lock token")          unless defined $token;
+        $o->throw("Invalid lock token '$token'") unless ref $token eq 'SCALAR';
+
+        my $name = $LockTokenMap{scalar($token)};
+
+        my $acquireTime = $$token;
+
+        delete $LockTokenMap{scalar($token)};
+        $o->{varMapNS}->{$tokenVar} = [];
+
+        # .................
+
+        my $sem = $o->{'lock-semaph'};
+        $o->throw("Can't find semaphore.") unless defined $sem;
+
+        PrimaLisp::releaseMutexLock($sem);
+        my $releaseTime = time;
+
+        # .................
+
+        my $heldTime = $releaseTime - $acquireTime;
+        $o->{lockHoldTimes}->{$name} += $heldTime;
+
+        return;
+    },
+
+
+#-------------------
+
+
+    'lock-acquire/usage' => '(lock-acquire -name- -token-var- [-options-]) : Acquire lock -name-.',
+    'lock-acquire' =>  sub {
+        my ($o, $args) = @_;
+
+        my $name     = shift @$args;
+        my $tokenVar = shift @$args;
+        my $options  = shift @$args;
+
+        # $o->throw("Invalid lock name '$name'")     unless $name     =~ /^[-\.:\w]+$/;
+        if(!exists $o->{__lock_ok_name__} || $name ne $o->{__lock_ok_name__}) {
+            $o->_assertIsValidTypeName('lock name', $name);
+        }
+
+        # $o->throw("Invalid token var '$tokenVar'") unless $tokenVar =~ /^[-\.:\w]+$/;
+        # in (atomic) token var is based on lock name.
+        if(!exists $o->{__lock_ok_name__} || $name ne $o->{__lock_ok_name__}) {
+            $o->_assertIsValidTypeName('token var 3', $tokenVar);
+        }
+
+        my $timeout = -1;
+        my $delay   = 0.1;
+        my $f       = 1.0000;
+
+
+        if(exists $options->{timeout}) { $timeout = $options->{timeout} }
+        if(exists $options->{delay})   { $delay   = $options->{delay}   }
+        if(exists $options->{f})       { $f       = $options->{f}       }
+
+        my $dir = '/tmp';
+        $dir = '/dev/shm' if -d '/dev/shm' && -w _;
+
+        my $lockFile = sprintf '%s/.dpl-lock-sym-%s', $dir, $name;
+        my $acquired = 0;
+
+        my ($checkPid, $holder);
+
+        # my $F = 0.1;  # 1.5  min
+          my $F = 0.25; # 1.25 min
+        # my $F = 0.5;  # <2   min
+        # my $F = 0.9;  #      min
+        # my $F = 1.0;  #  2   min
+        # my $F = 1.1;  #      min
+        # my $F = 1.5;  # <2   min
+ 
+        my $t0 = time;
+        do { 
+            my $now = time;
+            my $elapsedTime = $now - $t0;
+            # _report("Elasped: $elapsedTime, timeout; $timeout");
+
+            if($timeout >= 0 && $elapsedTime > $timeout) {
+                my $msg = "Timeout ($timeout s) getting lock '$name'.";
+                $msg .= " Check process $checkPid"  if defined $checkPid;
+
+                $o->throw({ msg => $msg, pid => $checkPid });
+            }
+
+            # _report("Trying...");
+            if(symlink("Core:$$", $lockFile)) {
+                $acquired = time;
+            }
+            else {
+                $holder = readlink $lockFile;
+                # _report("Holder $holder...");
+
+                if($holder =~ /:(\d+)$/) {
+                    $checkPid = $1;
+                    if($checkPid == $$) {
+                        $acquired = -1;
+                    }
+                    else {
+                        # _report("checkpid $checkPid...");
+                        my $fh = new FileHandle("< /proc/$checkPid/status");
+                        if(defined $fh) {
+                            close $fh;
+
+                            # If available, use load average as feedback input to a random delay.
+                            # The higher the loadaverage, the longer the possible delay.
+                            my $lafh = new FileHandle("< /proc/loadavg");
+                            if(defined $lafh) {
+                                my $str = <$lafh>;
+                                close $lafh;
+
+                                my @f = split /\s+/, $str;
+
+                                $delay = rand($F * $f[1]);
+
+                                # _report("lock: $name, loadavg $f[1], delay $delay");
+                            }
+
+                            select undef, undef, undef, $delay;
+                            $delay *= $f;
+                        }
+                        else {
+                            unlink $lockFile;
+                        }
+                    }
+                }
+            }
+        } while(!$acquired);
+
+        if($acquired > 0) {
+            my $token = \$acquired;
+
+            $o->throw("Just checked and there already was a token goin' on here!")
+                if exists $LockTokenMap{scalar($token)};
+
+            $LockTokenMap{scalar($token)} = $name;
+
+            # $o->eval("(= $tokenVar \$_token)", { _token => $token });
+              $o->{varMapNS}->{$tokenVar}->[0] = $token;
+        }
+        
+        return $acquired > 0? 1: 0;
+    },
+
+    'lock-release/usage' => '(lock-release -token-var-) : Release lock indicated by -token-.',
+    'lock-release' =>  sub {
+        my ($o, $args) = @_;
+
+        my $tokenVar = shift @$args;
+        # $o->throw("Invalid lock token var") unless $tokenVar =~ /^[-\.:\w]+$/;
+        if(!exists $o->{__lock_ok_name__} || $tokenVar ne "$o->{__lock_ok_name__}-lk-var") {
+            $o->_assertIsValidTypeName('lock token var 0', $tokenVar);
+        }
+
+        # my $token = $o->eval("\$$tokenVar", { });
+          my $token = $o->{varMapNS}->{$tokenVar}->[0];
+
+        $o->throw("Invalid lock token '$tokenVar' 1")  unless defined $token;
+        $o->throw("Invalid lock token '$token' 2")     unless ref $token eq 'SCALAR';
+
+        my $name = $LockTokenMap{scalar($token)};
+
+        my $acquireTime = $$token;
+
+        delete $LockTokenMap{scalar($token)};
+        # $o->eval("(var-clear $tokenVar)", { });
+          $o->{varMapNS}->{$tokenVar} = [];
+
+        my $dir = '/tmp';
+        $dir = '/dev/shm' if -d '/dev/shm' && -w _;
+
+        my $lockFile = sprintf '%s/.dpl-lock-sym-%s', $dir, $name;
+        my $releaseTime = time;
+        unlink $lockFile;
+
+        my $heldTime = $releaseTime - $acquireTime;
+        $o->{lockHoldTimes}->{$name} += $heldTime;
+
+        return;
+    },
+
+#-------------------
+
+    'zonk/usage' => '(zonk) : Zonk Runaways!.',
+    'zonk' =>  sub {
+        my ($o, $args) = @_;
+
+        return;
+    },
+
+    'sys-getpid/usage' => "(sys-getpid) : Return id of this process.",
+    'sys-getpid' =>  sub {
+        # my ($o, $args) = @_;
+        # print STDERR " >> sys-getpid($o, $args)\n";
+        return $$;
+    },
+
+    'sys-fork/usage' => "(sys-fork) : Return id of new child process, a clone of the parent.",
+    'sys-fork' =>  sub {
+        # my ($o, $args) = @_;
+        # print STDERR " >> sys-fork($o, $args)\n";
+    
+        my $pid = fork;
+        if(!$pid) { setpgrp(0,0) }
+
+        return $pid;
+    },
+
+    'sys-wait/usage' => "(sys-wait -pid-) : Wait for child process to return. Return its exit status.",
+    'sys-wait' =>  sub {
+        my ($o, $args) = @_;
+        # print STDERR " >> sys-wait($o, $args)\n";
+
+        my $xpid    = waitpid $args->[0], 0;
+        my $xstatus = $?;
+
+        return { xpid => $xpid, xstatus => $xstatus };
+    },
+
+
+    #---------------------------------------------------------
+
+    'msg-init/usage' => '(msg-init -name- -msg-port-names-) : Crate set (-name-) of underlying named pipes to support message passing.',
+    'msg-init' => sub {
+        my ($o, $args) = @_;
+        my ($name, $msgPortNames) = @$args;
+
+        # $o->throw("Invalid message set name '$name'.") unless defined $name && $name =~ /^[-.\w]+$/;
+        $o->_assertIsValidTypeName('message set name', $name);
+
+        my $fhHash = $o->{_msg_init_fhHash}->{$name};
+
+        if(defined $fhHash) { map { close $_; undef $_ } keys %$fhHash }
+        
+        $fhHash = { map { $_ => $o->_msg_mkfifo_fh($name, $_) } @$msgPortNames };
+
+        $o->{_msg_init_fhHash}->{$name} = $fhHash;
+
+        return;
+    },
+
+    'msg-select/usage' => '(msg-select -name- -rv- -wv- -to-) : Move data through named set of pipes as read and write vectors indicate msg-port availability.',
+    'msg-select' => sub {
+        my ($o, $args) = @_;
+        my ($name, $rv, $wr, $to) = @$args;
+
+        my $fhHash = $o->{_msg_init_fhHash}->{$name};
+
+        my $rvec;
+        my $wvec;
+        my $evec;
+
+        my $nf = select($rvec, $wvec, $evec, $to);
+
+        return $nf;
+    },
+
+    #---------------------------------------------------------
+
+    'msg-asend/usage' => "(msg-asend -req- -msg-) : Send message -msg- to -req- asynchronously, not waiting for a reply.",
+    'msg-asend' =>  sub {
+        my ($o, $args) = @_;
+        # print STDERR " >> msg-asend($o, $args)\n";
+        my ($req, $msg0) = @$args;
+
+        my $path = $o->_msg_mkfifo($req);
+
+        my $ofh = new FileHandle("> $path");
+        $o->throw("Can't write pipe '$path' to send: $!") unless defined $ofh;
+
+        print $ofh $msg0;
+        close $ofh;
+
+        return;
+    },
+
+    'msg-send/usage' => "(msg-send -req- -msg- [-options-]) : Send message -msg- to -req-, return its reply message",
+    'msg-send' =>  sub {
+        my ($o, $args) = @_;
+        # print STDERR " >> msg-send($o, $args) pid $$\n";
+
+        my ($req, $msg0, $options) = @$args;
+
+        my $timeout = $options->{timeout};
+
+        my $path = $o->_msg_mkfifo($req);
+
+        if(defined $timeout) { alarm $timeout }
+        my $ofh = new FileHandle("> $path");
+        if(defined $timeout) { alarm 0 }
+
+        $o->throw("Can't write pipe '$path' to send: $!") unless defined $ofh;
+
+        print $ofh $msg0;
+        close $ofh;
+
+
+        my $msg1;
+
+        my $ifh = new FileHandle("< $path");
+        $o->throw("Can't read pipe '$path' for response: $!") unless defined $ifh;
+
+        { local $/ = undef; $msg1 = <$ifh>; }
+        close $ifh;
+
+
+        return $msg1;
+    },
+
+    'msg-receive/usage' => "(msg-receive -req-) : Wait for a message to appear at -req-, set var -resp- to sender,  return message.",
+    'msg-receive' =>  sub {
+        my ($o, $args) = @_;
+        # print STDERR " >> msg-receive($o, $args) pid $$\n";
+
+        my ($req) = @$args;
+
+        my $path = $o->_msg_mkfifo($req);
+
+        my $msg;
+
+        my $ifh = new FileHandle("< $path");
+        $o->throw("Can't read pipe '$path' for request: $!") unless defined $ifh;
+
+        { local $/ = undef; $msg = <$ifh>; }
+        close $ifh;
+
+        return $msg;
+    },
+
+    'msg-reply/usage' => "(msg-reply -req- -msg-) : Reply to sender, send message -msg- to -req-.",
+    'msg-reply' =>  sub {
+        my ($o, $args) = @_;
+        # print STDERR " >> msg-reply($o, $args) pid $$\n";
+
+        my ($req, $msg) = @$args;
+
+        my $path = $o->_msg_mkfifo($req);
+
+        my $ofh = new FileHandle("> $path");
+        $o->throw("Can't write pipe '$path' to reply: $!") unless defined $ofh;
+
+        print $ofh $msg;
+        close $ofh;
+
+        return;
+    },
+
+
+
+    #------------------------------------------------------------------------------------------
+    # Encapsulation
+    # modeled after software interupt/trap for OS calls.
+    'oi-trap/usage' => "(oi-trap -name- -args- ...) : Invoke outer interpreter's -name- 'trap' handler, pass it -args-, return its value.",
+    'oi-trap' => sub {
+        my ($o, $args) = @_;
+        # _report([' >> oi-trap(%s, %s)', $o, $args]);
+
+        my $name = shift @$args;
+
+        # _report([' >> oi-trap(%s, %s)', $name, $args]);
+
+        $o->throw("Invalid name '$name'")
+            unless $name =~ /^[\w.!?-]+$/;
+
+        my $oi = $o->{outerInterp};
+        $o->throw("No outer interpreter handler found for oi-trap '$name'.")
+            if !defined $oi;
+
+        # See if outer interpreter can handle it.
+        my $handler = "oi-$name";
+        if(exists $oi->{varMapNS}->{$handler}) {
+            return $oi->eval("($handler \@\$args)", { args => $args });
+        }
+
+        # Otherwise, pass it on.
+        return $oi->eval("(oi-trap $name \@\$args)", { args => $args });
+    },
+
+
+    'ii-list/usage' => '(ii-list -pattern- [-options-]) : Return list of inner interpreters.',
+    'ii-list' => sub {
+        my ($o, $args) = @_;
+        my ($pattern, $options) = @$args;
+
+        $pattern = '*' unless defined $pattern;
+
+        my $dir = $o->{descDir};
+
+        my $iiDir = '.ii';
+        if($options->{'ii-user'}) { $iiDir = ".ii-user/$PrimaLisp::DPL_auth#$PrimaLisp::DPL_userid" }
+
+        if(defined $PrimaLisp::DPL_userid && !exists $o->{outerInterp}) {
+            $dir = "$dir/$iiDir";
+        }
+        else {
+            $dir = "$dir/.ii";
+        }
+
+        my @names = map { s/^$dir\///; $_ } glob "$dir/$pattern";
+
+        return \@names;
+    },
+
+
+    'ii-eval/usage' => "(ii-eval -ii- -env- -expr- ...) : Evaluate -expr- ... within encapsulated (inner) interpreter -ii-, return last expr's value.",
+    'ii-eval/ismacro' => 1,
+    'ii-eval' => sub {
+        my ($o, $args) = @_;
+        # _report([' >> ii-eval(%s, %s)', $o, $args]);
+
+        my $ii   = $o->eval(shift @$args, { });
+        my $env  = $o->eval(shift @$args, { });
+        my $exprs = $args;
+
+        if(ref $ii) { return $ii->evalAll($exprs, $env) }
+
+        ## dpl isock mods here
+        if($ii !~ /^([\w.-]+)@([\w.-]+)$/) {
+            $o->throw("Invalid parameter to ii-eval: $ii");
+        }
+
+        my ($userid, $host) = ($1, $2);
+
+        my $info = $remoteInterpreterInfo{$ii};
+        $o->throw("Invalid parameter to ii-eval: $ii.")
+            unless defined $info;
+
+
+        my $fh = $info->{remote_dpl};
+
+        $fh->autoflush(1);
+
+        my $len = 0;
+        map { $len += length $_ } @$exprs;
+        print $fh $len, "\n";
+        print $fh @$exprs;
+        my $respLen = <$fh>;
+        chomp $respLen;
+        my $resp;
+        read $fh, $resp, $respLen;
+
+        $resp = $o->eval('(desc-from-string $resp)', {resp =>$resp});
+
+        if($resp->{exception}) { $o->throw($resp->{exception}) }
+
+        return $resp->{value};
+    },
+
+    'ii-new/usage' => "(ii-new -name- -options-) : Return a new encapsulated (inner) PrimaLisp interpreter.",
+    'ii-new' => sub {
+        my ($o, $args) = @_;
+        # _report([' >> ii-new(%s, %s)', $o, $args]);
+
+        my ($name, $options) = @$args;
+
+        # If the name looks like userid@host...
+        if($name =~ /^([\w.-]+)@([\w.-]+)$/) {
+            my ($userid, $host) = ($1, $2);
+
+            ## dpl isock mods here
+
+            my $port = $options->{port};
+            if(!defined $port)   { print "No port specified.\n" ; return 1; } 
+            if($port   !~ /^\d+$/    ) { print "Invalid port: $port\n"; return 1; } 
+            if($userid !~ /^[\w.-]+$/) { print "Invalid userid: $userid\n"; return 1; }
+            if($host   !~ /^[\w.-]+$/) { print "Invalid name: $name..\n"  ; return 1; }
+
+
+            # Should think about collecting remote stderr and passing it back too... maybe on a second nc port?
+
+            system "ssh -n -l '$userid' '$host' 'exec dpl -isock $port' &";
+            $o->throw("Can't start remote DPL: $?")
+                if $?;
+
+            sleep 1;
+
+
+            my $fh = new FileHandle();
+            $o->throw("Can't get FileHandle: $!")
+                unless defined $fh;
+
+            my $proto = getprotobyname('tcp');
+
+            print STDERR " -- Getting socket\n";
+            if(!socket $fh, PF_INET, SOCK_STREAM, $proto) {
+                $o->throw("Can't open socket: $!");
+            }
+
+
+            print STDERR " -- Resolving host $host\n";
+            my $iaddr = inet_aton($host);
+            if(!defined $iaddr) {
+                $o->throw("Can't resolve hostname '$host': $!");
+            }
+
+
+            print STDERR " -- Connecting to host $host...\n";
+            if(!connect($fh, sockaddr_in($port, $iaddr))) {
+                $o->throw("Can't connect to host '$host': $!");
+            }
+
+            print STDERR " -- Connected to host $host\n";
+
+            $fh->autoflush(1)
+                if defined $fh;
+
+            my $str;
+            $str= <$fh>;
+            print STDERR " -->  $str";
+
+            $str = <$fh>;
+            print STDERR " -->  $str";
+
+            $remoteInterpreterInfo{$name} = {
+                remote_dpl => $fh,
+            };
+
+            return $name;
+        }
+
+
+        if(defined $name) {
+            $o->throw("Invalid name '$name'")
+                unless $name =~ /^[\w.!?-]*$/;
+           }
+
+
+        # Increment before calling new so that $o does not get put into symbol table.
+        ++$PrimaLisp::nInner;
+
+        my $ii = new PrimaLisp;
+
+        my $dir = $o->{descDir};
+
+
+        # /                 .
+        # /NAME             .ii/NAME                        
+        # ~                 .ii-user/MYUSERID
+        # ~/NAME            .ii-user/MYUSERID/.ii/NAME
+        # ~USERID           .ii-user/USERID
+        # ~USERID/NAME      .ii-user/USERID/.ii/NAME
+
+
+        # If we are not given a name, we run in our outer interpreter's descDir.
+        #
+        # If we are authenticated and ii-user option is set and at top interpreter,
+        #   If our name is '', we run in our homel descDir.               ./.ii-user/$userid
+        #   otherwise we run in                                           ./.ii-user/$userid/.ii/$name
+        #
+        # If we are anonymous, or authenticated and no ii-user option set, or not at top interpreter,
+        #   If our name is '', we run in our outer interpreter's descDir  .
+        #   otherwise we run in                                           ./.ii/$name
+
+        if(defined $name) {
+            if(defined $PrimaLisp::DPL_userid && !exists $o->{outerInterp} && $options->{'ii-user'}) {
+                if($name eq '') {
+                    $dir = "$dir/.ii-user/$PrimaLisp::DPL_userid";
+                    # $dir = "$dir/.ii-user/$PrimaLisp::DPL_auth#$PrimaLisp::DPL_userid";
+                }
+                else {
+                    $dir = "$dir/.ii-user/$PrimaLisp::DPL_userid/.ii/$name";
+                    # $dir = "$dir/.ii-user/$PrimaLisp::DPL_auth#$PrimaLisp::DPL_userid/.ii/$name";
+                }
+            }
+            else {
+                if($name eq '') {
+                    ;
+                }
+                else {
+                    $dir = "$dir/.ii/$name";
+                }
+            }
+
+            eval { mkpath $dir };
+            chmod 02777, $dir;
+            $o->throw("Can't create inner interpreter descriptor subdir '$dir': $@")
+                if $@;
+        }
+
+        $ii->{topDescDir}  = $o->{topDescDir};
+        $ii->{topInterp}   = $o->{topInterp};
+        $ii->{descDir}     = $dir;
+        $ii->{outerInterp} = $o;
+
+        if(exists $o->{authLevel}) { $ii->{authLevel} = $o->{authLevel} + 1 }
+        else                       { $ii->{authLevel} = 0                   }
+
+        return $ii;
+    },
+
+
+    'new-inst/usage' => '(new-inst -class- -args- ...) : Make a new instace of -class-.',
+    'new-inst' => sub {
+        my ($o, $args) = @_;
+
+        my $class = shift @$args;
+        my $class0 = $class;
+        $class =~ s/!$//;
+
+        my $env = { };
+        my $i;
+
+        $i = -1;                            map { ++$i; $env->{"_$i"} = $_         } @$args;    # capture input args in vars _0 _1 ...
+        $i = -1; my $inDecl     = join(' ', map { ++$i; sprintf '_%d $_%d', $i, $i } @$args);   # code for transfer hash in (namespace) call.
+        $i = -1; my $callParams = join(' ', map { ++$i; sprintf '$_%d',     $i     } @$args);   # code for parameters in call to (new).
+
+        my $code = sprintf '(namespace %s (hash _obj $_obj _s $self %s) (= Self $_s) (= self $_obj)                  (desc-read _ %s)(def-hash-fn $_ / new)(new %s)$self)',
+                                #      1                            2                                                             3                             4
+                                #      1       2        3        4
+                                       $class, $inDecl, $class0, $callParams;
+
+        # _report(['code: %s', $code]);
+
+        my $obj = { '.class' => $class };
+
+        $env->{_obj} = $obj; 
+
+        $obj = $o->eval($code, $env);
+
+        $obj->{'.class'} = $class;
+
+        return $obj;
+    },
+
+    #------------------------------------------------------------------------------------------
+    # Diagnostics/Output
+
+    'log-lines/usage' => "(log-lines ???) : NI Return a section of DPL log files from -offset- forward.",
+    'log-lines' => sub {
+        my ($o, $args) = @_;
+            # error.log|error_log, .dplx.log
+            # .dpld.log
+            # .swa/dispatachant/log
+            # ???
+
+        $o->throw("Not Implemented");
+
+        return;
+    },
+
+### TODO  Make print* check if args are utf8 already!
+
+    'print/usage' => "(print ...) : Print arguments to stdout..",
+    'print' => sub {
+        my ($o, $args) = @_;
+        my $ofh = $o->{ofh};
+        print $ofh map { encode_utf8($_) } @$args;
+        return;
+    },
+
+    'emit/usage' => "(emit ...) : Print arguments to stdout without utf-8 encoding..",
+    'emit' => sub {
+        my ($o, $args) = @_;
+        my $ofh = $o->{ofh};
+        print $ofh @$args;
+        return;
+    },
+
+    'eprint/usage' => "(eprint ...) : Print arguments to stderr.",
+    'eprint' => sub {
+        my ($o, $args) = @_;
+        print $logFH map { encode_utf8($_) } @$args;
+        return;
+    },
+
+#    # Write to diagnostic report. (i.e. log file but (log) was taken...)
+#    'report/usage' => "(report -msg-) : Timestamp and write -msg- to log file.",
+#    'report' => sub {
+#        my ($o, $args) = @_;
+#        # print $logFH  map { encode_utf8($_) } @$args;
+#        _report $args;
+#        return;
+#    },
+
+
+#  TODO 
+#   'report-watch/usage' => '(report-watch -timeout- -offset-) : .',
+#   'report-watch' => sub {
+#       my ($o, $args) = @_;
+#       my ($timeout, $offset) = @$args;
+# 
+#       # This needs a way to wait for a bit and return the 'tail end' of
+#       # the access_log, error_log, .dplx.log oand/or .dpld.log files...
+# 
+#       return;
+#   },
+#  TODO 
+
+
+    'sprintf/usage' => "(sprintf -fmt- ...) : Returns printf formated string.",
+    'sprintf' => sub {
+        my ($o, $args) = @_;
+        my $ofh = $o->{ofh};
+        my $fmt = shift @$args;
+        return sprintf($fmt, map { defined $_? $_: '()' } @$args);
+    },
+
+    'printf/usage' => "(printf -fmt- ...) : Print printf formated string to stdout, ",
+    'printf' => sub {
+        my ($o, $args) = @_;
+        my $ofh = $o->{ofh};
+        map { if(!utf8::is_utf8($_)) { $_ = encode_utf8 $_ } } @$args;
+
+        my $fmt = shift @$args;
+        printf $ofh $fmt, @$args;
+        return;
+    },
+
+    'emitf/usage' => "(emitf -fmt- ...) : Print printf formated string to stdout, without utf-8 encoding ",
+    'emitf' => sub {
+        my ($o, $args) = @_;
+        my $ofh = $o->{ofh};
+        my $fmt = shift @$args;
+        printf $ofh $fmt, @$args;
+        return;
+    },
+
+    'eprintf/usage' => "(eprintf -fmt- ...) : Print printf formated string to stderr, ",
+    'eprintf' => sub {
+        my ($o, $args) = @_;
+        map { if(!utf8::is_utf8($_)) { $_ = encode_utf8 $_ } } @$args;
+        my $fmt = shift @$args;
+        printf $logFH $fmt, @$args;
+        return;
+    },
+
+    'println/usage' => "(println ...) : Print arguments to stdout, followed by a newline.",
+    'println' => sub {
+        my ($o, $args) = @_;
+        my $ofh = $o->{ofh};
+        # map { if(!utf8::is_utf8($_)) { $_ = encode_utf8 $_ } } @$args;
+        if(@$args) { print $ofh map { (!utf8::is_utf8($str)? encode_utf8($_): $_), "\n" } @$args }
+        else    { print $ofh "\n"                              }
+        return;
+    },
+
+    'eprintln/usage' => "(eprintln ...) : Print arguments to stderr, followed by a newline.",
+    'eprintln' => sub {
+        my ($o, $args) = @_;
+        if(@$args) { print $logFH map { (!utf8::is_utf8($str)? encode_utf8($_): $_), "\n" } @$args }
+        else    { print $logFH "\n"                              }
+        return;
+    },
+
+    'apply/usage' => "(apply fn args-list) : unimplemented.", 
+    'apply' => sub {
+        $o->throw("(apply) is unimplemented.");
+        # my ($o, $args) = @_;
+
+        # TODO: make it work.
+        # my ($fn, $list) = @$args;
+        # _report " >> (apply $fn $list)";
+
+        # my $code = sprintf '(%s %s)', $fn, join(' ', @$list);
+        # _report "code: $code";
+        # return $o->eval($code, { });
+    },
+
+    'namespace/usage' => "(namespace -name- -vars- -body-) : Run -body- in var namespace -name-, with initial -vars-.",
+    'namespace/ismacro' => 1,
+    'namespace' => sub {
+        my ($o, $args, $env) = @_;
+
+        my $name    = shift @$args;
+
+        #TODO: Sanity check on $name.
+
+        return $o->{namespace}
+            unless @$args;
+
+        $name = $o->eval($name, $env)
+            if defined $name;
+
+
+        my $vars = shift @$args;
+        my $body = $args;
+
+
+        my $name0 = defined $name? $name: '()';
+        my $vars0 = defined $vars? $vars: '()';
+
+        # _report " >> (namespace $name0 $vars0 $body)";
+
+        $vars = $o->eval($vars, $env)
+            if defined $vars;
+
+        $vars = { } unless defined $vars;
+
+        my @saved;
+        if(defined $name) {
+            @saved = ($o->{namespace}, $o->{varMapNS}, $o->{varMapNS}->{':vars:'} );
+
+            my $varMap    = $o->{varMap};
+            my $callstack = $o->{varMapNS}->{'.'};
+
+            if(!exists $varMap->{$name}) { $varMap->{$name} = { } }
+
+            $o->{namespace}            = $name;
+            $o->{varMapNS}             = $varMap->{$name};
+            $o->{varMapNS}->{'.'}      = $callstack;
+            $o->{varMapNS}->{':vars:'} = [ $o->{varMapNS} ];
+        }
+
+        # Need to catch any exceptions, restore namespace, rethrow.
+
+        # if(defined $vars) { map { $o->{builtinsMap}->{'var-push'}->($o, [ $_, $vars->{$_} ]) } keys %$vars }
+
+        # _report(['body: %s', ref $body? join(' ', @$body): $body]);
+        # _report(['vars: %s', join(', ', map { sprintf "%s: %s", $_, $vars->{$_}} keys %$vars)]);
+
+        my $value = eval { $o->evalAll($body, $vars) };
+        my $e     = $@;
+
+        # if(defined $vars) { map { $o->{builtinsMap}->{'var-pop'}->($o, [ $_ ]) } keys %$vars }
+
+
+        if(defined $name) {
+            ($o->{namespace}, $o->{varMapNS}, $o->{varMapNS}->{':vars:'} ) = @saved;
+        }
+
+        if($e) {
+            # _report(["Exception in (namespace): %s", $e]);
+
+            if(ref $e eq 'HASH') {
+                # It's a meta exception (one of ours.)
+                # map { _report([" -> %s: %s", $_, $e->{$_}]) } keys %$e;
+
+                   if(exists $e->{value}    ) { $value = $e->{value}     }
+                elsif(exists $e->{exception}) { $o->throw($e->{exception})  }
+                else { $o->throw("Unexpected meta-exception in (namespace): $e; " . join(',', map { "$_=$e->{$_}" } sort keys %$e)) }
+            }
+
+            # Rethrow regular exception (something from perl) as a meta exception.
+            else { $o->throw($e) }
+        }
+
+        return $value;
+    },
+
+    'env/usage' => "(env) : Print sorted list of environment variables to stdout.",
+    'env' => sub {
+        my ($o, $args) = @_;
+        my $ofh = $o->{ofh};
+        map { printf $ofh "%s  %s\n", $_, $ENV{$_} } sort keys %ENV;
+        return;
+    },
+
+    'http-headers/usage' => '(http-headers) : Returns a hash containing any HTTP request headers.',
+    'http-headers' => sub {
+        my ($o, $args) = @_;
+
+        if(exists $o->{_latest_http_request_headers_}) {
+            # _report([' ## Using HTTP headers from (socket-in-http)']);
+            return { %{ $o->{_latest_http_request_headers_} }};
+        }
+        elsif(exists $o->{outerInterp}) {
+            # _report([' ## Using HTTP headers from outer interpreter']);
+            return $o->{outerInterp}->{builtinsMap}->{'http-headers'}->($o->{outerInterp}, []);
+        }
+
+        # _report([' ## Getting HTTP headers from env vars']);
+
+        if(exists $ENV{CONTENT_TYPE}) { $ENV{HTTP_CONTENT_TYPE} = $ENV{CONTENT_TYPE} }
+
+        # TODO handle duplicate cookie names!
+        return {
+            map {
+                my @t = split('_', $_);
+                shift @t;
+
+                my $key = join('-', map { ucfirst lc $_ } @t);
+                my $val = $ENV{$_};
+
+                # _report(['k: %s, v: %s.', $key, $val]);
+
+                $key => $val;
+            } grep { /^HTTP_/ } keys %ENV
+        };
+    },
+
+
+    'exit/usage1' => "(exit -status-) : Shutdown this interpreter!. Return process exit status -status-.",
+    'exit/usage2' => "(exit) : Shutdown this interpreter!.",
+    'exit' => sub {
+        my ($o, $args) = @_;
+        # print "Bye.\n" if -t STDIN;
+
+        exit $args->[0]  if defined $args->[0];
+        exit;
+    },
+
+    'sleep/usage' => "(sleep -delay-) : Sleep for -delay- fractional seconds.",
+    'sleep' => sub {
+        my ($o, $args) = @_;
+        return unless defined $args->[0];
+        select undef, undef, undef, $args->[0];
+        return;
+    },
+
+
+    #------------------------------------------------------------------------------------------
+    # Regexp
+    '=~/usage' => '(=~ -op- -name- -regexp- -regexp-) : Bind variable -name- to -regexp- and apply -op-.',
+    '=~' => sub {
+        my ($o, $args) = @_;
+        my ($op, $name, $regexp1, $regexp2, $opt) = @$args;
+
+        $regexp2 = '' unless defined $regexp2;
+        $opt     = '' unless defined $opt;
+
+        my $val;
+        if($op eq 'm') {
+            $opt = $regexp2;
+            $val = ($o->{varMapNS}->{$name}->[0] =~ "m/$regexp1/$opt");
+        }
+        elsif($op eq 's') {
+            _report( "s/$regexp1/$regexp2/$opt" );
+            $val = ($o->{varMapNS}->{$name}->[0] =~ s/$regexp1/$regexp2/);
+        }
+        elsif($op eq 'tr') {
+            $val = ($o->{varMapNS}->{$name}->[0] =~ "tr/$regexp1/$regexp2/$opt");
+        }   
+        else { $o->throw("Unknown regexp op '$op'") }
+
+        return $val;
+    },
+
+    #------------------------------------------------------------------------------------------
+    # Strings handling and utilities
+    'concat/usage' => "(concat ...) : Returns the concatenation of its args.",
+    'concat' => sub {
+        my ($o, $args) = @_;
+        # return join('', map { !defined $_? '': ref $_ eq 'ARRAY'? @$_: $_ } @$args);
+        return $o->recurs_deep_join($args, '');
+    },
+
+    'deep-join/usage' => "(deep-join ...) : Returns the recursive concatenation of its args.",
+    'deep-join' => sub {
+        my ($o, $args) = @_;
+        my ($items, $jstr) = @$args;
+
+       $jstr = "\n"  unless defined $jstr;
+
+        return $o->recurs_deep_join($items, $jstr);
+    },
+
+    'html--wrapper/usage' => "(html--wrapper ...) : Optimized function for HTML-macros.",
+    'html--wrapper' => sub {
+        my ($o, $args) = @_;
+        my ($tag, $body, $attrs) = @$args;
+        printf STDERR " >> html--wrapper(%s, %s, %s)  '%s'\n", $tag, $body, $attrs, ref($body)  if $tag eq 'html';
+
+        if(!defined $body && defined $attrs) {
+            $body = $attrs;
+            undef $attrs;
+        }
+
+        if(defined $body) { $body = $o->recurs_deep_join($body, "\n") }
+
+        if(!defined $attrs) {
+            return defined $body? sprintf("<$tag>%s</$tag>", $body): "<$tag/>"
+        }
+
+        if(defined $attrs) {
+            $attrs = join(' ', map {
+                my $val = $o->eval('(xmlencode $_)', {_ => $attrs->{$_}});
+                   sprintf('%s="%s"', $_, $val)
+            } keys %$attrs);
+        }
+
+        $attrs = '' unless defined $attrs;
+
+        return !defined $body || $body eq ''?
+            sprintf('<%s %s/>', $tag, $attrs):
+            sprintf('<%s %s>%s</%s>', $tag, $attrs, $body, $tag);
+
+    },
+
+
+
+
+    'substr/usage1' => "(substr -str- -offset-) : Return substring of -str- starting at -offset-.",
+    'substr/usage2' => "(substr -str- -offset- -length-) : Return substring of -str- starting at -offset- for -length-.",
+    'substr' => sub {
+        my ($o, $args) = @_;
+        return substr($args->[0], $args->[1], $args->[2])  if defined $args->[2];
+        return substr($args->[0], $args->[1])           if defined $args->[1];
+    },
+
+    'repeat/usage' => "(repeat -str- -n-) : Return -str- concatenated -n- times.",
+    'repeat' => sub {
+        my ($o, $args) = @_;
+        my ($str, $n) = @$args;
+        return $str x $n;
+    },
+
+    'x/usage' => "(x -str- -n-) : Return -str- concatenated -n- times.",
+    'x' => sub {
+        my ($o, $args) = @_;
+        my ($str, $n) = @$args;
+        return $str x $n;
+    },
+
+    'trim/usage' => "(trim -str- [-inner-too-]) : Return -str- after collapsing whitespace.",
+    'trim' => sub {
+        my ($o, $args) = @_;
+        my ($str, $innertoo) = @$args;
+        return unless defined $str;
+        $str =~ s/^\s*//s;
+        $str =~ s/\s*$//s;
+        if(defined $innertoo && $innertoo) { $str =~ s/\s+/ /gs }
+        return $str;
+    },
+
+    'builtins/usage' => "(builtins) : Return a list of the names of the current builtin functions.",
+    'builtins' => sub {
+        my ($o, $args) = @_;
+        return { map { $_ => 1 } grep { !m/.\// && !/usage/ } sort keys %{$o->{builtinsMap}} };
+    },
+
+
+    'join/usage1' => "(join -delim- -list-) : Return each element of -list- joined by -delim-.",
+    'join/usage2' => "(join -delim- -str- ...) : Return each -arg- joined by -delim-.",
+    'join' => sub {
+        my ($o, $args) = @_;
+        my $j = shift @$args;
+        $args = [ grep { defined $_ } @$args ];
+        return if !@$args;
+
+        if(ref $args->[0] eq 'ARRAY') {    
+            return join($j, @{$args->[0]});
+        }
+        return join($j, @$args);
+    },
+
+    'split/usage' => "(split -delim- -str-) : Return list of elements obtained by splitting -str- at -delim-",
+    'split' => sub {
+        my ($o, $args) = @_;
+        my ($delim, $str) = @$args;
+        return [ split /$delim/, $str ]  if defined $str;
+        return;
+    },
+
+    'grep/usage' => "(grep -pred- -list-) : Return list of -item- from -list- for which (-pred- -item-) returns true.",
+    'grep' => sub {
+        my ($o, $args) = @_;
+        my ($pred, $list) = @$args;
+        return [ grep { scalar $o->eval("(_pred \$_item)", { _pred => $pred, _item => $_ }) } @$list ];
+    },
+
+#    'sort-alpha/usage' => "(sort-alpha -list-) : Return list of items from -list- sorted alphabetically.",
+#    'sort-alpha' => sub {
+#        my ($o, $args) = @_;
+#        return [ sort @{$args->[0]} ];
+#    },
+#
+#    'sort-num/usage' => "(sort-num -list-) : Return list of items from -list- sorted numerically.",
+#    'sort-num' => sub {
+#        my ($o, $args) = @_;
+#        return [ sort { $args <=> $b } @{$args->[0]} ];
+#    },
+#
+#    'sort-pred/usage' => "(sort-pred -pred- -list-) : Return list of items from -list- sorted according to (-pred- -a- -b-).",
+#    'sort-pred/ismacro' => 1,
+#    'sort-pred' => sub {
+#        my ($o, $args) = @_;
+#        return [ sort { $o->eval($args->[0], { _a => $args, _b => $b }) } @{$o->eval($args->[1])} ];
+#    },
+#
+#    'sort-tt/usage' => "(sort-tt -list-) : custom sort for Trendy Terms.",
+#    'sort-tt' => sub {
+#        my ($o, $args) = @_;
+#        return [ sort {
+#            my $ret = ($args->[0] <=> $b->[0]); return $ret if $ret;
+#               $ret = ($args->[1] cmp $b->[1]); $ret
+#         } @{$args->[0]} ];
+#    },
+
+    'reverse/usage' => "(reverse -list-) : Return reversed list of items in -list-.",
+    'reverse' => sub {
+        my ($o, $args) = @_;
+        return [ reverse @{$args->[0]} ];
+    },
+
+    'time/usage' => "(time) : Return system time.",
+    'time' => sub {
+        my ($o, $args) = @_;
+        return time;
+    },
+
+    'time-to-date/usage' => "(time-to-date -time-) : Return readable date from -time-.",
+    'time-to-date' => sub {
+        my ($o, $args) = @_;
+
+        my $datestr;
+        if(defined $args->[1] && $args->[1] eq 'utc') {
+            $datestr = scalar(gmtime $args->[0]) . ' +0000';
+        }
+        else {
+            $datestr = scalar localtime $args->[0];
+        }
+
+        # 0   1   2  3        4    5
+        # Mon Jun 25 18:20:49 2012 UT
+        my @D = split /\s+/, $datestr;
+        
+        # 0    2  1   4    3        5   < from
+        # 0    1  2   3    4        5   > to
+        # Mon, 25 Jun 2102 18:20:49 UT
+        $datestr = sprintf '%s, %s %s %s %s%s', $D[0], $D[2], $D[1], $D[4], $D[3], defined $D[5]? " $D[5]": '';
+
+        return $datestr;
+    },
+
+    'date-to-time/usage' => "(date-to-time -date-) : Return system time from readable -date-.",
+    'date-to-time' => sub {
+        my ($o, $args) = @_;
+        return cnvt_date_to_time($args->[0], $args->[1]);
+    },
+
+    'date/usage1' => "(date) : Return readable local date/time.",
+    'date/usage2' => "(date utc) : Return readable UTC date/time.",
+    'date' => sub {
+        my ($o, $args) = @_;
+        if(defined $args->[0] && $args->[0] eq 'utc') { return sprintf('%s UTC', scalar gmtime) }
+        return scalar localtime;
+    },
+
+    'isodate/usage1' => "(isodate) : Return the current ISO 8601 formated date/time.",
+    'isodate/usage2' => "(isodate -timestamp-) : Return the ISO 8601 formated date/time for the given timestamp.",
+    'isodate' => sub {
+        my ($o, $args) = @_;
+        my ($t) = @$args;
+
+        return cnvt_time_to_iso_8601_date(defined $t? $t: time);
+    },
+
+
+
+    'urlencode/usage' => "(urlencode -str-) : Return percent encoded value of -str-.",
+    'urlencode' => sub {
+        my ($o, $args) = @_;
+        return unless defined $args->[0];
+        return _urlencode($args->[0]);
+    },
+
+    'urldecode/usage' => "(urldecode -str-) : Return percent decoded value of -str-.",
+    'urldecode' => sub {
+        my ($o, $args) = @_;
+        return unless defined $args->[0];
+        return _urldecode($args->[0]);
+    },
+
+    'xmlencode/usage' => "(xmlencode -text-) : Return XML encoded value of -text-.",
+    'xmlencode' => sub {
+        my ($o, $args) = @_;
+        return unless defined $args->[0];
+        return _xmlencode($args->[0]);
+    },
+
+    'xmldecode/usage' => "(xmldecode -text-) : Return XML decoded value of -text-.",
+    'xmldecode' => sub {
+        my ($o, $args) = @_;
+        return unless defined $args->[0];
+        return _xmldecode($args->[0]);
+    },
+
+    'encode-utf8/usage' => "(encode-utf8 -str-) : Return UTF-8 encoding of -str-.",
+    'encode-utf8' => sub {
+        my ($o, $args) = @_;
+        return unless defined $args->[0];
+        return encode_utf8($args->[0]);
+    },
+
+    'utf8-encode/usage' => "(utf8-encode -str-) : Return UTF-8 encoding of -str-.",
+    'utf8-encode' => sub {
+        my ($o, $args) = @_;
+        return unless defined $args->[0];
+        return encode_utf8($args->[0]);
+    },
+
+    'decode-utf8/usage' => "(decode-utf8 -str-) : Return UTF-8 decoding of -str-.",
+    'decode-utf8' => sub {
+        my ($o, $args) = @_;
+        return unless defined $args->[0];
+        return decode_utf8($args->[0]);
+    },
+
+    'utf8-decode/usage' => "(utf8-decode -str-) : Return UTF-8 decoding of -str-.",
+    'utf8-decode' => sub {
+        my ($o, $args) = @_;
+        return unless defined $args->[0];
+        return decode_utf8($args->[0]);
+    },
+
+
+    'encode-charset/usage' => "(encode-charset -encoding- -str-) : Return -encoding encoding of -str-.",
+    'encode-charset' => sub {
+        my ($o, $args) = @_;
+        return unless defined $args->[0] && defined $args->[1];
+        return encode($args->[0], $args->[1]);
+    },
+
+    'decode-charset/usage' => "(decode-charset -encoding- -str-) : Return -encoding- decoding of -str-.",
+    'decode-charset' => sub {
+        my ($o, $args) = @_;
+        return unless defined $args->[0] && defined $args->[1];
+        return decode($args->[0], $args->[1]);
+    },
+
+
+    #------------------------------------------------------------------------------------
+    # (deref-url $url $options)
+    # method     => one of GET PUT POST DELETE.
+    # headers    => hash containing request headers.
+    # body       => request message body.
+    # user-agent => user agent
+    # user       => who's there?
+    # password   => don't tell anyone
+    # verbose    => show retreival details
+    #
+    #  Should probably check that the url is /^https?:/ too.
+    'deref-url/usage' => "(deref-url -url- -options-) : Fetch -url-, return raw response. Get headers from (http-headers).",
+    'deref-url' => sub {
+        my ($o, $args) = @_;
+        my ($url, $options) = @$args;
+
+        return unless defined $url;
+        # return if $url =~ /\\|'/;
+
+        my ($method, $headers, $body, $uagent, $user, $password, $useRuntimeCreds, $useRuntimeAppKeys);
+
+        my $verbose     = 0;
+        my $noserialize = 0;
+        my $deserialize = 1;
+
+        if(defined $options) {
+            $method   = uc $options->{method};
+            $headers  = $options->{headers};
+            $body     = $options->{body};
+            $uagent   = $options->{'user-agent'};
+            $user     = $options->{user};
+            $password = $options->{password};
+            $verbose  = $options->{verbose};
+            $noserialize  = $options->{noserialize} if defined $options->{noserialize};
+            $deserialize  = $options->{deserialize} if defined $options->{deserialize};
+
+            $useRuntimeCreds   = $options->{'use-runtime-creds'};
+            $useRuntimeAppKeys = $options->{'use-runtime-app-keys'};
+
+            ## $body isn't checked.  It doesn't go to the commandline.
+
+            map { $o->throw("Invalid deref-url option value '$_'")  if defined $_ && !/^[! \w.\@-]+$/ }
+              ($uagent);
+
+            map { $o->throw("Invalid deref-url option value '$_'")  if defined $_ && !/^[!\w.\@-]+$/ }
+              ($method, $user, $password, $verbose, $noserialize, $deserialize);
+
+            map { $o->throw("Invalid header value '$_'")  if defined $_ && !/^[\w.-]+$/ && $headers->{$_} =~ /^[\w.-]+$/ } keys %$headers;
+        }
+
+        if($useRuntimeCreds && !defined $user && !defined $password) {
+            # _report(['Using stashed creds here...']);
+            $user     = $PrimaLisp::DPL_userid;
+            $password = $PrimaLisp::DPL_password;
+        }
+
+        if($useRuntimeAppKeys && defined $PrimaLisp::AppKeyHeaders && ref $PrimaLisp::AppKeyHeaders eq 'HASH') {
+            # _report(['Using stashed app keys here...']);
+            map { if(!exists $headers->{$_}) { $headers->{$_} = $PrimaLisp::AppKeyHeaders->{$_} } }
+                keys %$PrimaLisp::AppKeyHeaders;
+        }
+
+        # We need wget to be verbose to catch error messages...
+        # $verbose = 1;
+
+        $uagent = sprintf("DPL-%s/%s", $PrimaLisp::Version, $PrimaLisp::VDate)  unless defined $uagent;
+
+        # CLS - Command Line Switch.
+        my $headerCLS = join(' ', map { sprintf "--header='%s: %s'", $_, $headers->{$_} } keys %$headers);
+        # print $logFH " -- headerCLS: <|$headerCLS|>\n";
+
+        my $outputCLS   =         "--save-headers -O - --read-timeout=300";
+        my $certCLS     =         "--no-check-certificate";
+        my $uagentCLS   = sprintf "--user-agent='%s'",    $uagent;
+        my $userCLS     = sprintf "--http-user='%s'",     $user     if defined $user;
+        my $passwordCLS = sprintf "--http-password='%s'", $o->unmaskData($password) if defined $password;
+        my $verboseCLS  = defined $verbose && $verbose? '-v': '-q';
+
+
+        my $clsStr = join(' ', map { defined $_? $_: '' }
+                            ($outputCLS, $certCLS, $headerCLS, $uagentCLS, $userCLS, $passwordCLS, $verboseCLS, $wgetExtraCLS));
+
+        $method = 'GET'  unless defined $method && $method;
+
+        my $frag = sprintf ".%6f.%d", time, $$;
+
+        my ($cmd, $resp, $respErr);
+        my $respErrFile = sprintf "/tmp/.wget.err.%s", $frag;
+
+
+        my $urlShEnc = $url;
+        # $urlShEnc =~ s/'/\\'/gs;
+        $urlShEnc =~ s/\$/\\\$/gs;
+
+        if($method eq 'GET') {
+            $cmd = "wget $clsStr \"$urlShEnc\"";
+        }
+
+        elsif($method eq 'POST') {
+            my $tmpFile = sprintf "/tmp/.wget.post.%s", $frag;
+            my $fh = new FileHandle("> $tmpFile");
+            $o->throw(" Can't write tmp file '$tmpFile' for POST: $!")
+                unless defined $fh;
+
+            # Might want serialization options to have some effect here.
+            my $j = new JSON;
+            print $fh $noserialize? $body: $j->allow_nonref->pretty->canonical->ascii->encode($body);
+            close $fh;
+
+            $cmd = "wget $clsStr --post-file=$tmpFile \"$urlShEnc\"";
+        }
+
+        elsif($method eq 'PUT' || $method eq 'DELETE' || $method eq 'HEAD') {
+            return $o->deref_url($url, $options);
+        }
+
+        else { $o->throw("Unknown HTTP method '$method' called here.") }
+
+
+
+        _report([' %%> %s\n', $cmd])  if $verbose;
+        $resp = $o->getCommandOutput("exec $cmd 2> $respErrFile");
+
+        my $rc = $?;
+
+
+        my $respErrFH = new FileHandle("< $respErrFile");
+        { local $/ = undef; $respErr = <$respErrFH>; }
+        close $respErrFH;
+
+        unlink $respErrFile unless -s $respErrFile && $rc;
+
+        if($rc) {
+            my $msg = "Request Failed ($rc):\n$resp\n$respErr";
+            _report($msg);
+
+            my $err = { msg => $msg };
+            if($respErr =~ /HTTP request sent, awaiting response... (.*?)\n/s) {
+                my $st = $1;
+                $err->{status} = $st;
+
+                if($st =~ /^(\d+)/) {
+                    $err->{code} = $1;  
+                }
+            }
+            $o->throw($err);
+        }
+
+        # Now take off the preamble to the response.
+        if($resp !~ /^(.*?\nSaving to: .*?\n)?(HTTP.*?)\r?\n(.*?)\r?\n\r?\n(.*)$/s) { $o->throw("1. Can't get response headers from: $resp") }
+        my ($wgetMsg, $rawStatus, $rawHeaders, $respBody) = ($1, $2, $3, $4);
+
+        if($rawStatus !~ /^(.*?)\s+(.*)$/) { $o->throw("2. Can't get response headers from: $resp") }
+        my ($type, $status) = ($1, $2);
+
+        if($type !~ /^HTTP\/1/) { $o->throw("Not an HTTP response from: $resp") }
+
+        # _report("rawHeaders: $rawHeaders");
+        my $headers2 = { map { my @f = split(/: /, $_, 2); lc($f[0]) => $f[1] } split(/\r?\n/, $rawHeaders) };
+
+        if(defined $options) {
+            $options->{status}  = $status;
+            $options->{headers} = $headers2;
+        }
+
+        my $ct;
+        $ct = $headers2->{'content-encoding'};
+        if(defined $ct && $ct eq 'gzip') {
+            $respBody = Compress::Zlib::memGunzip $respBody;
+        }
+
+        $ct = $headers2->{'content-type'};
+        if(defined $ct) {
+            if($ct =~ /application\/json/ || $ct =~ /text\/json/) {
+                return if !defined $respBody || $respBody eq '';
+
+                my $j = new JSON;
+                return $j->allow_nonref->decode($respBody);
+            }
+            elsif($ct =~ /text\/plain/) {
+                return decode_utf8($respBody);
+            }
+        }
+
+        return $respBody;
+    },
+
+    'async-deref-url/usage' => '(async-deref-url -url- -options-) : Sets up asynchronous URL dereference. Returns handle for use with (async-*) calls.',
+    'async-deref-url' => sub {
+        my ($o, $args) = @_;
+        my ($url) = @$args;
+        _report([' >> (async-deref-url %s)', $url]);
+
+        $o->throw("Invalid URL '$url'")  if $url =~ /['"\s]/;
+
+        # TODO: Factor various options parts from (deref-url) and call from here too.
+
+        #!!  Only handles simple GET for now.
+
+        my $urlShEnc = $url;
+        $urlShEnc =~ s/'/\\'/gs;
+
+        return $o->begin_Async("wget -O - -q '$urlShEnc'");
+    }, 
+
+    'async-read/usage' => '(async-read -fhi-) : Reads data block from response that is \'ready\' to read.',
+    'async-read' => sub {
+        my ($o, $args) = @_;
+        my ($fhi) = @$args;
+        # _report([' >> (async-read %s)', $fhi]);
+
+        return $o->read_Async($fhi);
+    }, 
+
+    'async-end/usage' => '(async-end -fhi-) : Ends asynchronous transfer and returns the complete response.',
+    'async-end' => sub {
+        my ($o, $args) = @_;
+        my ($fhi) = @$args;
+        # _report([' >> (async-end %s)', $fhi]);
+
+        return $o->end_Async($fhi);
+    }, 
+
+    'async-select/usage' => '(async-select -async-list- -timeout-) : Returns an indication of what async handles are \'ready\' to read.',
+    'async-select' => sub {
+        my ($o, $args) = @_;
+        my ($argssyncList, $timeout) = @$args;
+        my $timeout0 = defined $timeout? $timeout: '()';
+        # _report([' >> (async-select %s %s)', $asyncList, $timeout0]);
+
+        return $o->select_Async($asyncList, $timeout);
+    }, 
+
+
+    #------------------------------------------------------------------------------------
+    # Variable & functions
+    # NB: var-push, var-pop use perl shift/unshift so top of stack is element 0.
+    'var-push/usage' => "(var-push var value) : Push -value- on variable -var-. Returns -value-.",
+    'var-push' => sub {
+        my ($o, $args) = @_;
+        return unless defined $args->[0];
+        # print STDERR " -- var-push: var: $args->[0], val: $args->[1]\n";
+
+        my ($var, $val) = @$args;
+        if(ref $var eq 'HASH') { return { map { $_ => $o->{builtinsMap}->{'var-push'}->($o, [ $_ , $var->{$_} ] ) } keys %$var  } }
+
+        my $stack = $o->{varMapNS}->{$args->[0]};
+        if(!defined $stack) {
+            $stack = [ ];
+            $o->{varMapNS}->{$args->[0]} = $stack;
+        }
+        unshift @$stack, $args->[1];
+        
+        return $args->[1];
+    },
+
+    'var-pop/usage' => "(var-pop -var-) : Pop value from variable -var-. Return the value.",
+    'var-pop' => sub {
+        my ($o, $args) = @_;
+        return unless defined $args->[0];
+
+        my $var   = $args->[0];
+        my $vars  = $o->{varMapNS};
+
+        if(ref $var eq 'HASH')  { return { map { $_ => $o->{builtinsMap}->{'var-pop'}->($o, [ $_ ] ) } keys %$var } }
+        if(ref $var eq 'ARRAY') { return { map { $_ => $o->{builtinsMap}->{'var-pop'}->($o, [ $_ ] ) } @$var } }
+
+        if(@$args > 1) {
+            my $builtinsMap  = $o->{builtinsMap};
+            return [ map { $builtinsMap->{'var-pop'}->($o, [ $_ ]) } @$args ];
+        }
+
+        # print STDERR " -- var-pop: var: $args->[0]\n";
+        my $stack = $o->{varMapNS}->{$args->[0]};
+        if(!defined $stack) {
+            $stack = [ ];
+            $o->{varMapNS}->{$args->[0]} = $stack;
+        }
+
+        return shift @$stack;
+    },
+
+    'var-capture/usage' => '(var-capture) : Intercept (var-set) calls and store updates in the hash provided.',
+    'var-capture' => sub {
+        my ($o, $args) = @_;
+        my ($attrs) = @$args;
+
+        $o->{_var_capture_info}  = { };
+        $o->{_var_capture_attrs} = $attrs;
+
+        return;
+    },
+
+    'var-restore/usage' => '(var-restore) : Intercept (var-set) calls and store updates in the hash provided.',
+    'var-restore' => sub {
+        my ($o, $args) = @_;
+
+        my $vars    = $o->{varMapNS};
+
+        my $capture = $o->{_var_capture_info};
+        my $attrs   = $o->{_var_capture_attrs};
+
+        delete $o->{_var_capture_info};
+        delete $o->{_var_capture_attrs};
+
+
+        return [ map {
+            my $var = $_;
+            $vars->{$var} = $capture->{$var};
+
+            if($var !~ /\//) { map { $vars->{"$var/$_"} = [ $attrs->{$_} ] } keys %$attrs }
+
+            $var
+         } keys %$capture ];
+    },
+
+    '=/usage1' => "(var-set -var- -value-) : Set variable -var- to -value-.  Return -value-.",
+    '=/usage2' => "(var-set -var- -value- -attrs-) : Set variable -var- to -value- with attributes -attrs-.  Return -value-.",
+    'var-set/usage1' => "(var-set -var- -value-) : Set variable -var- to -value-.  Return -value-.  See also (=)",
+    'var-set/usage2' => "(var-set -var- -value- -attrs-) : Set variable -var- to -value- with attributes -attrs-.  Return -value-.  See also (=)",
+    'var-set' => sub {
+        my ($o, $args) = @_;
+        # return unless defined $args->[0];
+        # print STDERR " -- var-set: var: $args->[0], val: $args->[1]\n";
+
+        my ($var, $val, $attrs) = @$args;
+
+        if(ref $var eq 'HASH') { return { map { $_ => $o->{builtinsMap}->{'var-set'}->($o, [ $_ , $var->{$_}, $attrs ] ) } keys %$var  } }
+
+        # Check global shared vars, $<foo/bar> stashes and returns contents of $descDir/.var-gps/foo/bar
+        if($var =~ /^<(.*)>$/) {
+            $var = $1;
+            map { $o->throw("Unacceptable gps var name '$var'.") unless /^[-.~:\w%+ ]+$/ && !m~/\.~ && !m~^\.~ }  # /
+                split '/', $var;
+
+            my $path = "$o->{descDir}/.var-gps/$var";
+
+            if(!-f $path) {
+                my $dirPath = $path;
+                $dirPath =~ s~/[^/]*$~~;  # /
+
+                if(! -d $dirPath) { mkpath $dirPath }
+                chmod 0777, $dirPath;
+            }
+
+            my $fh = new FileHandle("> $path.$$");
+            $o->throw("Can't set gps var '$var': $!")
+                unless defined $fh;
+
+            print $fh $val;
+            close $fh;
+
+            my $mtimeFS = (stat "$path.$$")[9];
+            rename "$path.$$", $path;
+
+            if(!defined $attrs) {
+                $args->[2] = $attrs = {};
+            }
+            $attrs->{mtime} = $mtimeFS;
+
+            return _var_set_simple $o, $args;
+        }
+
+
+        $val = _var_set_simple $o, $args;
+
+        if(defined $attrs) { map { _var_set_simple $o, [ "$args->[0]/$_", $attrs->{$_} ] } keys %$attrs; }
+        
+        return $val;
+    },
+
+    'var-get/usage' => "(var-get -var-) : Return value of variable -var-.",
+    'var-get' => sub {
+        my ($o, $args) = @_;
+        return unless defined $args->[0];
+
+        my $vars  = $o->{varMapNS};
+        my $var   = $args->[0];
+
+        # Was getting odd number of hash element errors when var was cleared...
+        # if(ref $var eq 'HASH')  { return { map { $_ => ( $o->{builtinsMap}->{'var-get'}->($o, [ $_ ] )) } keys %$var } }
+        # if(ref $var eq 'ARRAY') { return { map { $_ => ( $o->{builtinsMap}->{'var-get'}->($o, [ $_ ] )) } @$var } }
+
+        my $varNames;
+    
+        if(ref $var eq 'HASH')  { $varNames = [ keys %$var ] }
+        if(ref $var eq 'ARRAY') { $varNames = $var           }
+
+        if(defined $varNames) {
+            my $out = {};
+            my $bi = $o->{builtinsMap}->{'var-get'};;
+            map { $out->{$_} = $bi->($o, [ $_ ] ) } @$varNames;
+            return $out;
+        }
+
+
+        # Check global shared vars, $<foo/bar> stashes and returns contents of $descDir/.var-gps/foo/bar
+        if($var =~ /^<(.*)>$/) {
+            $var = $1;
+            map { $o->throw("Unacceptable gps var name '$var'") unless /^[-.~:\w%+ ]+$/ && !m~/\.~ && !m~^\.~ }  # /
+                split '/', $var;
+
+            $o->throw("Expected only a var name in args!")
+                unless @$args == 1;
+
+            my $path = $o->getFullPathFromPath(".var-gps/$var");
+
+            if(-f $path) {
+                my $mtimeFS   = (stat $path)[9];
+                my $mtimeAttr = $vars->{"$args->[0]/mtime"}->[0];
+
+                if(!defined $mtimeAttr || $mtimeFS != $mtimeAttr) {
+                    my $fh = new FileHandle("< $path");
+                    $o->throw("Can't get gps var '$var': $!")
+                        unless defined $fh;
+
+                    local $/ = undef;
+                    my $value = <$fh>;
+                    close $fh;
+
+                    push @$args, $value, {mtime => $mtimeFS};
+                }
+            }
+            else {
+                delete $o->{varMapNS}->{"<$var>"};
+                delete $o->{varMapNS}->{"<$var>/mtime"};
+                return;
+            }
+
+            return _var_set_simple $o, $args;
+        }
+
+
+
+        # Lazy evaluation, run fn once, stash its value.
+        if(exists $vars->{"$args->[0]/lazyFn"}) {
+            my $lazyFn = $vars->{"$args->[0]/lazyFn"}->[0];
+            delete $vars->{"$args->[0]/lazyFn"};
+
+            my $expr = "($lazyFn $args->[0])";
+            my $value = $o->eval($expr, { });
+
+            $vars->{$args->[0]} = [ $value ];
+
+            return $value;
+        }
+
+        my $stack = $vars->{$var};
+        if(defined $stack) {
+            return $stack->[0];
+        }
+
+        return undef;
+    },
+
+    'var-clear/usage' => "(var-clear var) : Remove variable -var-.",
+    'var-clear' => sub {
+        my ($o, $args) = @_;
+        return unless defined $args->[0];
+
+        for my $var (@$args) {
+            # Check global shared vars, $<foo/bar> stashes and returns contents of $descDir/.var-gps/foo/bar
+            if($var =~ /^<(.*)>$/) {
+                my $var  = $1;
+
+                map { $o->throw("Unacceptable gps var name '$var'") unless /^[-.~:\w%+ ]+$/ && !m~/\.~ && !m~^\.~}  # /
+                    split '/', $var;
+
+                my $path = "$o->{descDir}/.var-gps/$var";
+
+                unlink $path;
+                delete $o->{varMapNS}->{"<$var>/mtime"};
+            }
+
+            delete $o->{varMapNS}->{$var};
+        }
+
+        return;
+    },
+
+    'var-dump/usage' => "(var-dump -options-) : Report all variables in the current namespace to log file.",
+    'var-dump' => sub {
+        my ($o, $args) = @_;
+
+        my ($options) = @$args;
+
+        # if(defined $options) { map { _report(['%s: %s', $_, $options->{$_}]) } keys %$options}
+
+        my $tag = $options->{tag};
+
+        my $varMap = $o->{varMap};
+
+        if(defined $options->{allns} && $options->{allns}) {
+            # map { _report(['var keys "%s": %s', $_, $varMap->{$_}]) } keys %$varMap;
+            map { $o->{builtinsMap}->{'var-dump'}->($o, [ { ns => $_ } ]) } sort keys %$varMap;
+            return;
+        }
+
+        my ($ns, $vars);
+        if(defined $options->{ns}) {
+            $ns   = $options->{ns};
+            if(!exists $varMap->{$ns}) { $o->throw("No such variable map '$ns'.") }
+
+            $vars = $varMap->{$ns};
+        }
+        else {
+            $ns   = $o->{namespace};
+            $vars = $o->{varMapNS};
+        }
+
+        $tag = defined $tag? " ($tag)": '';
+
+        print $logFH "\n +- namespace: '$ns'\n";
+        print $logFH " +- var-dump$tag starts...\n";
+
+        map {
+            my $str = '';
+            if(ref $vars->{$_} eq 'ARRAY') { $str = sprintf '[ %s ]', join(', ', map { defined $_? $_: '<undef>' } @{$vars->{$_}}) }
+
+            printf $logFH " |- %-30s: %s\n", $_, $str;
+        } sort keys %$vars;
+        print $logFH " +- var-dump$tag ends.\n";
+        print $logFH " +- authLevel: $o->{authLevel}\n" if exists $o->{authLevel};
+        print $logFH " +- namespace: '$ns'\n";
+        print $logFH " +-      vars: $vars\n";
+        print $logFH "\n";
+
+        return;
+    },
+
+
+    #------------------------------------------------------------------------------------
+    'list/usage' => "(list -item- ...) : Return a list initialized with given items.",
+    'list' => sub {
+        my ($o, $args) = @_;
+        # print STDERR " >> list($o, $args)\n";
+        # return [ @$args ];
+        return \@$args;
+    },
+
+    'list-merge/usage' => "(list-merge -list- -lists- ...) : Append items from second and subsequent -lists- to -list-.",
+    'list-merge' => sub {
+        my ($o, $args) = @_;
+        # print STDERR " >> push($o, $args)\n";
+        my $list = shift @$args;
+        map { push @$list, @$_ } @$args;
+        return $list;
+    },
+
+    'push/usage' => "(push -list- -item-) : Push (insert at high index end) -item- onto -list-. Return -item-.",
+    'push' => sub {
+        my ($o, $args) = @_;
+        # print STDERR " >> push($o, $args)\n";
+        my $list = shift @$args;
+        push @$list, @$args;
+        return $args->[0];
+    },
+
+    'pop/usage' => "(pop -list-) : Pop (remove from  high index end) value from -list-. Return the value.",
+    'pop' => sub {
+        my ($o, $args) = @_;
+        # print STDERR " >> pop($o, $args)\n";
+        return pop @{$args->[0]};
+    },
+
+    'shift/usage' => "(shift -list-) : Shift (remove from low index end) value from -list-. Return the value.",
+    'shift' => sub {
+        my ($o, $args) = @_;
+        # print STDERR " >> shift($o, $args)\n";
+        return shift @{$args->[0]};
+    },
+
+    'unshift/usage' => "(unshift -list- -item-) : Unshift (insert at low index end) -item- onto -list-. Return -item-.",
+    'unshift' => sub {
+        my ($o, $args) = @_;
+        # print STDERR " >> unshift($o, $args)\n";
+        unshift @{$args->[0]}, $args->[1];
+        return $args->[1];
+    },
+
+
+
+    'len/usage' => "(len -str-) : Return the length of string -str-.",
+    'len' => sub {
+        my ($o, $args) = @_;
+        # print STDERR " >> list-len($o, $args)\n";
+        return length $args->[0];
+    },
+
+    'list-len/usage' => "(list-len  -list-) : Return the length of list -list-.",
+    'list-len' => sub {
+        my ($o, $args) = @_;
+        # printf STDERR " >> list-len($o, $args, %s)\n", $args->[0];
+        return unless ref $args->[0] eq 'ARRAY';
+        return scalar @{$args->[0]};
+    },
+
+    'list-diff/usage' => "(list-diff  -list-1- -list-2-) : Return a hash containing three lists: in-1 in-1&2, in-2; partitions of the two input lists.",
+    'list-diff' => sub {
+        my ($o, $args) = @_;
+        my ($list1, $list2) = @$args;
+        # printf STDERR " >> list-diff($o, $args, %s)\n", $args->[0];
+
+        my $onlyIn_1  = { map { $_ => 1 } @$list1 };
+        my $onlyIn_2  = { };
+        my $inBoth_12 = { };
+
+        map {
+            if(defined $onlyIn_1->{$_}) {
+                $inBoth_12->{$_} = 1;
+                delete $onlyIn_1->{$_};
+            }
+            else {
+                $onlyIn_2->{$_} = 1;
+            }
+        } @$list2;
+
+        my $in1  = [ sort keys %$onlyIn_1  ];
+        my $in12 = [ sort keys %$inBoth_12 ];
+        my $in2  = [ sort keys %$onlyIn_2  ];
+
+        my $szUnion = scalar(@$in1)  +
+                      scalar(@$in12) +
+                      scalar(@$in2);
+
+        my $jaccardSimilarity = !$szUnion? -1: scalar(@$in12) / $szUnion;
+
+        return {
+            'in-1'     => $in1,
+            'in-1&2'   => $in12,
+            'in-2'     => $in2,
+            'jac-sim'  => $jaccardSimilarity,
+        };
+    },
+
+    'ith/usage1' => "(ith -list- -i-)       : Return the -i-'th element of -list-.",
+    'ith/usage2' => "(ith -list- -i- -val-) : Set the -i-'th element of -list- to -val-. Yeah, its's little wierd.",
+    'ith' => sub {
+        my ($o, $args) = @_;
+        my ($list, $i, $val) = @$args;
+
+        return undef unless defined $list;
+        return undef unless @$list;
+
+        $o->{iteratorMap}->{scalar $list} = $i + 1;
+        return if $i < 0;
+
+        return defined $val? ($list->[$i] = $val): $list->[$i];
+    },
+
+    'first/usage' => "(first -list-) : Return the first item in -list-.",
+    'first' => sub {
+        my ($o, $args) = @_;
+        my ($list) = @$args;
+
+        return undef unless defined $list;
+        return undef unless @$list;
+
+        $o->{iteratorMap}->{scalar $list} = 1;  # index of the next one.
+        return $list->[0];
+    },
+
+    'last/usage' => "(last -list-) : Return the last item in -list-.",
+    'last' => sub {
+        my ($o, $args) = @_;
+        my ($list) = @$args;
+
+        # return undef unless defined $list;
+        return undef unless @$list;
+
+        return $list->[@$list-1];
+    },
+
+    'rest/usage' => "(rest -list-) : Return the rest of -list- (after first item).",
+    'rest' => sub {
+        my ($o, $args) = @_;
+        my @copy = @{$args->[0]};
+        shift @copy;
+        return \@copy;
+    },
+
+    'next/usage' => "(next -list-) : Return the next item in -list-. (one iterator per list)",
+    'next' => sub {
+        my ($o, $args) = @_;
+        my ($list) = @$args;
+
+        my $i = $o->{iteratorMap}->{scalar $list};  # index of the this one.
+        return undef unless defined $i;
+        return undef if $i >= @$list;
+
+        $o->{iteratorMap}->{scalar $list} = $i + 1;
+        return $list->[$i];
+    },
+
+    
+#    'shuffle-list/usage' => "(map-list -list-) : Return a randomly shuffled form of -list-.",
+#    'shuffle-list' => sub {
+#        my ($o, $args) = @_;
+#        # print STDERR " >> map-list($o, $args)\n";
+#
+#       return [ map { $_->[1] } sort { $a->[0] <=> $b->[0] } map { [ rand, $_ ] } @{$args->[0]} ];
+#    },
+
+
+    'map-list/usage' => "(map-list -fn- -list-) : Call function -fn- succesively with each item in -list-. Return the list of results.",
+    'map-list' => sub {
+        my ($o, $args) = @_;
+        # print STDERR " >> map-list($o, $args)\n";
+        my $fn   = shift @$args;
+
+        if(@$args == 1) {
+            my $list = shift @$args;
+            return [ map { scalar $o->eval("(_fn \$_item)", { _fn => $fn, _item => $_ }) } @$list ];
+        }
+
+        my $n = -1;
+        for my $i (@$args) { if ($n < @$i) { $n = @$i }}
+
+        my $i   = 0;
+        my $out = [ ];
+        while($n--) {
+            my $item_args = [ map { $_->[$i] } @$args ];    # next item from each list in lists.
+            ++$i;
+            push @$out, scalar($o->eval("(_fn \@\$_iargs)", { _fn => $fn, _iargs => $item_args }));
+        }
+
+        return $out;
+    },
+
+    'list-reduce/usage' => "(list-reduce -fn- -list-) : Return reduction of -list- using -fn-.",
+    'list-reduce' => sub {
+        my ($o, $args) = @_;
+        # print STDERR " >> list-reduce($o, $args)\n";
+        my ($fn, $list) = @$args;
+        
+        my $first = shift @$list;
+        my $acc = $first;
+        map { $acc = $o->eval('(_fn $_acc $_)', { _fn => $fn, _acc => $acc, _ => $_ }) } @$list;
+        unshift @$list, $first;
+        return $acc;
+    },
+
+    'sym-from-string/usage' => "(sym-from-string -str-) : Convert -str- into a symbol",
+    'sym-from-string' => sub {
+        my ($o, $args) = @_;
+         #print STDERR " >> sym-from-string($o, $args)\n";
+
+        my $str = shift @$args;
+        if(exists $SymMap{$str}) { return $SymMap{$str} }
+
+        my $copy = Compress::Zlib::memGzip(encode_utf8($str));
+        $SymMap{$str} = \$copy;
+        return \$copy;
+    },
+
+    'sym-to-string/usage' => "(sym-to-string -sym-) : Convert symbol -sym- into its corresponding string.",
+    'sym-to-string' => sub {
+        my ($o, $args) = @_;
+        # print STDERR " >> sym-to-string($o, $args)\n";
+        $o->throw("Arg isn't a symbol")  unless ref $args->[0] eq 'SCALAR';
+
+        my $copy = ${$args->[0]};
+        return decode_utf8( Compress::Zlib::memGunzip($copy));
+    },
+
+    'sym-list/usage' => "(sym-list) : Return a list of defined symbols.",
+    'sym-list' => sub {
+        my ($o, $args) = @_;
+        # print STDERR " >> hash($o, $args)\n";
+        return [ sort keys %SymMap ];
+    },
+
+    'hash/usage' => "(hash -name- -value- ...) : Return a Map initialized with any (name/value pair) args.",
+    'hash' => sub {
+        my ($o, $args) = @_;
+        # print STDERR " >> hash($o, $args)\n";
+        if(@$args == 1) { return $args->[0] }   # to suport "${foo-bar}-baz" usage
+        return { @$args };
+    },
+
+    'hash-keys/usage' => "(hash-keys -desc- -path-) : Return list of names in Map in descriptor -desc- at path -path-.",
+    'hash-keys' => sub {
+        my ($o, $args) = @_;
+        # print STDERR " >> "hash-keys($o, $args), ". join(',', @$args)\n";
+        my $map = $o->hashLookup(@$args);
+        return [ keys %$map ];
+    },
+
+    'hash-n-keys/usage' => "(hash-n-keys -desc- -path-) : Return the number of keys in Map in descriptor -desc- at path -path-.",
+    'hash-n-keys' => sub {
+        my ($o, $args) = @_;
+        # print STDERR " >> "hash-n-keys($o, $args), ". join(',', @$args)\n";
+        my $map = $o->hashLookup(@$args);
+        my $n = 0;
+        while(my ($k, $v) = each %$map) { ++$n }
+        return $n;
+    },
+
+    'hash-each/usage' => "(hash-each -fn- -hash-) : Call function -fn- succesively with each key/value pair in -hash-. Return the list of results.",
+    'hash-each' => sub {
+        my ($o, $args) = @_;
+        # print STDERR " >> hash-each($o, $args)\n";
+        my ($fn, $hash) = @$args;
+
+        return unless defined $hash;
+
+        my @out = ();
+        while(my ($k, $v) = each %$hash) {
+            push @out, scalar($o->eval("(_fn \$_k \$v)", { _fn => $fn, _k => $k, _v => $v }));
+        }
+
+        return \@out;
+    },
+
+    'hash-values/usage' => "(hash-values -desc- -path-) : Return list of values in Map in descriptor -desc- at path -path-.",
+    'hash-values' => sub {
+        my ($o, $args) = @_;
+        # print STDERR " >> hash-values($o, $args)\n";
+        my $map = $o->hashLookup(@$args);
+        return [ values %$map ];
+    },
+
+    'map-hash/usage' => "(map-hash -fnNode- -fnNext- -node-) : unimplemented generic map traversal.",
+    'map-hash' => sub {
+        $o->throw("(map-hash) is unimplemented.");
+
+        # TODO: make it work.
+        # my ($o, $args) = @_;
+        # # print STDERR " >> map-hash($o, $args)\n";
+        # my ($fnNode, $fnNext, $node, $sibs) = @$args;
+        # 
+        # $o->eval("(_fnNode \$node)", { _fnNode => $fnNode, _node => $node});
+        # 
+        # my $kids = [ map { $map->{$_}  } sort grep { ref $map->{$_} eq 'HASH' } keys %$map ];
+        # $sibs = [ ] unless defined $sibs;
+        # 
+        # my $nextNode = $o->eval("(_fnNext \$sibs \$_kids)", { _fnNext => $fnNext, _sibs => $sibs, _kids => $kids});
+        # 
+        # return;
+    },
+
+    'hash-incr/usage' => "(hash-incr -desc- -path- -name- [-incr-]) : Return incremented value of -name- in -path- map in -desc-",
+    'hash-incr' => sub {
+        my ($o, $args) = @_;
+
+        # my $val = $o->hashLookup($args->[0], $args->[1], $args->[2]);
+        # $val += defined $args->[3]? $args->[3]: 1;
+        # return $o->hashLookup($args->[0], $args->[1], $args->[2], $val);
+
+        return $o->hashLookup($args->[0], $args->[1], $args->[2], undef, undef, defined $args->[3]? $args->[3]: 1);
+    },
+
+    'hash-decr/usage' => "(hash-incr -desc- -path- -name- [-incr-]) : Return decremented value of -name- in -path- map in -desc-",
+    'hash-decr' => sub {
+        my ($o, $args) = @_;
+
+        # my $val = $o->hashLookup($args->[0], $args->[1], $args->[2]);
+        # $val -= defined $args->[3]? $args->[3]: 1;
+        # return $o->hashLookup($args->[0], $args->[1], $args->[2], $val);
+
+        return $o->hashLookup($args->[0], $args->[1], $args->[2], undef, undef, defined $args->[3]? -$args->[3]: -1);
+    },
+
+    'hash-get/usage' => "(hash-get -desc- -path- -name-) : Return value of -name- in -path- map in -desc-",
+    'hash-get' => sub {
+        my ($o, $args) = @_;
+        # print STDERR " >> "hash-get($o, $args), " . join(',', @$args)\n";
+        return $o->hashLookup($args->[0], $args->[1], $args->[2]);
+    },
+
+    'hash-set/usage' => "(hash-set -desc- -path- -name- -value-) : Store value -value- in -name- at -path- in -desc-.",
+    'hash-set' => sub {
+        my ($o, $args) = @_;
+        # print STDERR " >> hash-set($o, $args)\n";
+        return $o->hashLookup($args->[0], $args->[1], $args->[2], $args->[3]);
+    },
+
+    'hash-set-init/usage' => "(hash-set-init -desc- -path- -name- -value-) : Store value -value- in -name- at -path- in -desc-.",
+    'hash-set-init' => sub {
+        my ($o, $args) = @_;
+        # print STDERR " >> hash-set($o, $args)\n";
+        return $o->hashLookup($args->[0], $args->[1], $args->[2]);
+    },
+
+    'hash-clear/usage' => "(hash-clear -desc- -path- -name-) : Remove field -name- at -path- from -desc-.",
+    'hash-clear' => sub {
+        my ($o, $args) = @_;
+        # print STDERR " >> hash-clear($o, $args)\n";
+        return $o->hashLookup($args->[0], $args->[1], $args->[2], undef, 1);
+    },
+
+    'hash-rename/usage' => "(hash-rename -desc- -path- -old-name- -new-name-) : Rename field -old-name- to -new-name- at -path- in -desc-.",
+    'hash-rename' => sub {
+        my ($o, $args) = @_;
+        # print STDERR " >> hash-clear($o, $args)\n";
+        my ($desc, $path, $oldName, $newName) = @$args;
+
+        my $value = $o->hashLookup($desc, $path, $oldName, undef, 1);
+
+        return $o->hashLookup($desc, $path, $newName, $value);
+    },
+
+
+    'hash-move/usage' => "(hash-move -desc- -old-path- -old-name- -new-path- -new-name-) : Moves field -old-name- at -old-path- to -new-name- at -new-path- in -desc-.",
+    'hash-move' => sub {
+        my ($o, $args) = @_;
+        # print STDERR " >> hash-clear($o, $args)\n";
+        my ($desc, $oldPath, $oldName, $newPath, $newName) = @$args;
+
+        my $value = $o->hashLookup($desc, $oldPath, $oldName, undef, 1);
+
+        return $o->hashLookup($desc, $newPath, $newName, $value);
+    },
+
+    'hash-eval/usage' => "(hash-eval -desc- -path- -name-) : Eval contents of -name- at -path- in -desc-, return value of last expression.",
+    'hash-eval' => sub {
+        my ($o, $args) = @_;
+        # printf STDERR " >> hash-eval($o, $args) [%s]\n", join(',', @$args);
+
+        my $varMap = $o->{varMapNS};
+        my $path   = $args->[1];
+
+        if($path !~ m~^/~) { 
+             if($path eq '.')                            { $path = $varMap->{':'}->[0]                    }
+          elsif($path =~ m~^\./~ || $path =~ m~^\.\./~)  { $o->throw(sprintf("Invalid path '%s'", $path)) }
+          else                                           { $path = $varMap->{':'}->[0] . '/' . $path      }
+        }
+
+        my $expr = $o->hashLookup($args->[0], $path, $args->[2]);
+        # $expr = decode_utf8($expr);
+
+        # printf STDERR " -- hash-eval: <|%s|>\n", encode_utf8($expr);
+
+        if(defined $expr && $expr =~ /^HASH\(/) {
+            # map { _report([" @#  '%s' -> '%s'", $_, $expr->{$_}]) } keys %$expr;
+            $o->throw("Don't know how to eval a Map.");
+        }
+
+        unshift @{$varMap->{':'}}, $path;
+
+        # _report(['name: %s, hash-eval stack: %s', $args->[2], join(':', @{$varMap->{':'}})]);
+
+        my $value = eval { $o->evalAll($expr, { }) };
+        # print STDERR " -- value: <|$value|>\n";
+
+        shift @{$varMap->{':'}};
+
+        if($@) { die $@ }
+
+
+        return $value;
+    },
+
+    'hash-paths/usage1' => '(hash-paths -desc-) : Return list of all Map paths in -desc-.',
+    'hash-paths/usage2' => '(hash-paths -desc- -callback-) : Call -callback- with each path in -desc- as found.',
+    'hash-paths' => sub {
+        my ($o, $args) = @_;
+        # print STDERR " >> sprintf("hash-paths($o, $args) [%s]", join(',', @$args))\n";
+
+        my $desc     = shift @$args;
+        my $callback = shift @$args;
+        return unless defined $desc;
+
+        my $list = [ '/' ];
+        my $path = [ ];
+
+        sub _hp_walk {
+            my ($map, $path, $list) = @_;
+            for my $key (('', sort keys %$map)) {
+                next unless ref $map->{$key} eq 'HASH';
+
+                push @$path, $key;
+                my $pathStr = '/' . join('/', @$path);
+
+                push @$list, $pathStr;
+                &_hp_walk($map->{$key}, $path, $list);
+
+                pop @$path;
+            }
+        };
+
+        _hp_walk $desc, $path, $list;
+
+        return $list;
+    },
+
+    'hash-subtract/usage' => '(hash-subtract -h1- -h2-) : Subtract fields in -h2- from corresponding fields in -h1-, returning the difference in a hash.',
+    'hash-subtract' => sub {
+        my ($o, $args) = @_;
+        my ($h1, $h2) = @$args;
+
+        my @k1 = sort keys %$h1;
+        my @k2 = sort keys %$h2;
+
+        my $out = {};
+
+        map {
+            my $v1 = $h1->{$_};
+            my $v2 = $h2->{$_};
+
+            my $v;
+            if(ref $v1 eq 'HASH') { $v = $o->eval('(hash-subtract $_1 $_2)', {_1 => $v1, _2 => $v2}) }
+            elsif($v1 eq $v2)     { $v = $v1                                                         }
+            elsif($v1 == $v2)     { $v = $v1                                                         }
+            else                  { $v = [ $v1-$v2, 0+$v1, 0+$v2 ]                                       }
+
+            $out->{$_} = $v;
+        } @k1;
+
+        return $out;
+    },
+
+
+#------------------------------------------
+    # (-> $redirect-to)
+    # 'symbolic link' within descriptor.
+    #  access to this should act the same as access to refer-to.
+    '->/usage' => "(-> -redirect-to-) : unimplemented.  Intended for soft-linking non-hierarchical references so Descriptors containing graphs can be (de)serialized",
+    '->' => sub {
+        $o->throw("(->) is unimplemented.");
+
+        # TODO: make it work.
+        # my ($o, $args) = @_;
+        # # print STDERR " >> '->'($o, $args)\n";
+
+        # _report "'->' is unimplemented.";
+
+        # my ($redirectTo) = @$args;
+        # return;
+    },
+
+
+    'report-log/usage' => '(report-log -target- -level- -msg-) : Record -msg- in -target- log file with level -level.',
+    'report-log' => sub {
+        my ($o, $args) = @_;
+        my ($target, $level, $msg) = @$args;
+
+        $o->_assertIsValidTypeName('target name', $target);
+
+        my $now = time;
+        my $isodate = cnvt_time_to_iso_8601_date $now;
+
+
+        my $code = '';
+        if(!ref $msg) {
+            shift @$args;
+            shift @$args;
+            shift @$args;
+
+            $msg = sprintf $msg, @$args;
+            $code = '(report %s $msg)';
+        }
+
+        my $desc = { time => $now, timestamp => $isodate, level => $level, message => $msg };
+
+        $o->evalAll($code . '(desc-record $target $desc)', {msg => $msg, target => "$target.log", desc => $desc});
+
+        return;
+    },
+
+    'desc-replay/usage' => '(desc-replay -target- -options-) : Replay recorded descriptors from -target- log file.',
+    'desc-replay' => sub {
+        my ($o, $args) = @_;
+        my ($target, $options) = @$args;
+
+        $o->_assertIsValidTypeName('target name', $target);
+
+        my $fDir = "$o->{descDir}/.desc-record";
+        my $fname = "$fDir/$target";
+
+        return if ! -f $fname;
+
+        my $key = $target;
+        
+        my $cursor = $options->{cursor};
+        if(defined $cursor) { $key = "$key $cursor" }
+
+        my $fh = $descReplayInfo{$key};
+
+        if($options->{reset}) {
+            if(defined $fh) {
+                close $fh;
+                undef $fh;
+                delete $descReplayInfo{$key};
+            }
+        }
+
+        if(!defined $fh) {
+            $fh = new FileHandle("< $fname");
+            $descReplayInfo{$key} = $fh;
+        }
+
+
+        my $desc;
+        my $line = <$fh>;
+
+        if(defined $line) {
+            chomp $line;
+            my $j = new JSON;
+            $desc = eval { $j->utf8(1)->allow_nonref->decode($line) };
+
+            $o->throw("Can't deserialize string <|$line|>: $@")
+                if $@;
+        }
+
+        return $desc;
+    },
+
+    'desc-record/usage' => '(desc-record -target- -desc-) : Record -desc- in -target- log file.',
+    'desc-record' => sub {
+        my ($o, $args) = @_;
+        my ($target, $desc) = @$args;
+
+        $o->_assertIsValidTypeName('target name', $target);
+
+        my $fDir = "$o->{descDir}/.desc-record";
+        my $fname = "$fDir/$target";
+
+        if(! -d $fDir) { mkpath $fDir }
+        chmod 0777, $fDir;
+
+        my $j = new JSON;
+        my $json = eval { $j->utf8(1)->allow_nonref->encode($desc) };
+
+        _report([" !! Can't serialize descriptor %s: %s", $desc, $@])  if $@;
+
+        $o->throw("Can't serialize descriptor: $@")
+            if $@;
+
+        my $fh = new FileHandle(">> $fname");
+        print $fh $json, "\n";
+        eval { close $fh };
+        chmod 0666, $fname;
+
+        return;
+    },
+
+    'desc-keys/usage' => "(desc-keys -desc- -path-) : unimplemented",
+    'desc-keys' => sub {
+        my ($o, $args) = @_;
+        # print STDERR " >> desc-keys($o, $args)\n";
+
+        my ($desc, $path) = @$args;
+        # print STDERR " >> desc-keys($o, [$desc, $path])\n";
+
+        return $o->getDescKeys($desc, $path);
+    },
+
+    'desc-get/usage' => "(desc-get -desc- -path- -name-) : Return value of -name- at -path- in -desc- using 'refer-to' inheritance.",
+    'desc-get' => sub {
+        my ($o, $args) = @_;
+        # print STDERR " >> "desc-get($o, $args), ". join(',', @$args)\n";
+        my $value = $o->hashLookup(@$args);
+        $value = $o->referToLookup_inner(@$args) unless defined $value;
+        return $value;
+    },
+
+    'desc-set/usage' => "(desc-set -desc- -path- -name- -value-) : Set value of -name- at -path- in -desc- to -value-.",
+    'desc-set' => sub {
+        my ($o, $args) = @_;
+        # print STDERR " >> desc-set($o, $args)\n";
+        my $value = $o->hashLookup(@$args);
+        return $value;
+    },
+
+    'desc-eval/usage' => "(desc-eval -desc- -path- -name-) : Like (hash-eval)",
+    'desc-eval' => sub {
+        my ($o, $args) = @_;
+        # print STDERR " >> sprintf("desc-eval($o, $args) [%s]", join(',', @$args))\n";
+
+        my $expr = $o->hashLookup(@$args);
+        $expr = $o->referToLookup_inner(@$args) unless defined $expr;
+        # print STDERR " -- eval: <|$expr|>\n";
+
+        if(defined $expr && $expr =~ /^HASH\(/) {
+            # map { _report([" @#  '%s' -> '%s'", $_, $expr->{$_}]) } keys %$expr;
+            $o->throw("Don't know how to eval a Map.");
+        }
+
+        my $value = $o->evalAll($expr, { });
+        # print STDERR " -- value: <|$value|>\n";
+
+        return $value;
+    },
+
+
+    'desc-list/usage1' => "(desc-list -pattern-) : Return list of names of available Descriptors matching -pattern-.",
+    'desc-list/usage2' => "(desc-list -pattern- -sort-by-) : Return list of names of available Descriptors matching -pattern-.",
+    'desc-list' => sub {
+        my ($o, $args) = @_;
+        # print STDERR " >> desc-list($o, $args)\n";
+        my ($pattern, $options) = @$args;
+
+        $pattern = '*'  unless defined $pattern && $pattern ne '';
+
+        my $sortBy = $options->{'sort-by'};
+
+
+        my $descDir = $o->{descDir};
+        my @list = grep { -f && -s && !/,v$/ } glob "$descDir/$pattern";
+
+        if(defined $sortby) {
+#              if($sortby =~ /^\+?size$/) { @list = sort { my @A = stat $a; my @B = stat $b; $A[7] <=> $B[7] } @list }
+#           elsif($sortby =~ /^-size$/)   { @list = sort { (stat $b)[7] <=> (stat $a)[7] } @list }
+#           elsif($sortby =~ /^\+?date$/) { @list = sort { (stat $a)[9] <=> (stat $b)[9] } @list }
+#           elsif($sortby =~ /^-date$/)   { @list = sort { (stat $b)[9] <=> (stat $a)[9] } @list }
+#           elsif($sortby =~ /^\+?name$/) { @list = sort { $a cmp $b }                     @list }
+#           elsif($sortby =~ /^-name$/)   { @list = sort { $b cmp $a }                     @list }
+#
+#           else { $o->throw("Invalid -sort-by- param '$sortby'"); }
+        }
+
+        @list = map { s/^$descDir\///; $_ } @list;
+
+        if(defined $o->{outerInterp} && defined $options->{'show-all'}) {
+            my $oiNames = $o->{outerInterp}->eval ('(desc-list $pattern $sortBy)', {pattern => $pattern, sortBy => $sortBy});
+            push @list, @$oiNames;
+        }
+
+        return [ sort @list ];
+    },
+
+    'desc-export/usage' => '(desc-export) : .',
+    'desc-export' => sub {
+    },
+
+    'desc-export/usage' => '(desc-export) : .',
+    'desc-export' => sub {
+    },
+
+
+#     'desc-to-string/usage' => "(desc-to-string   -desc-   [options]) : Return serialized form of -desc-.",
+#     'desc-to-string' => sub {
+#         my ($o, $args) = @_;
+#         # print STDERR " >> desc-to-string($o, $args)\n";
+# 
+#         # $o->throw(" !! Presently unable to serialize an undefined value.")
+#         #   unless defined $args->[0];
+# 
+#         my $str = eval { JSON->new->pretty->canonical->ascii->encode($args->[0]) };
+#         my $e = $@;
+#         if($e) {
+#             # _report "Exception in (desc-to-string): JSON: $e\n$args->[0]";
+#             $o->throw($e);
+#         }
+# 
+#         return $str;
+#     },
+# 
+#     'desc-from-string/usage' => "(desc-from-string -string- [options]) : Return the descriptor deserialized from -string-.",
+#     'desc-from-string' => sub {
+#         my ($o, $args) = @_;
+#         # print STDERR " >> desc-from-string($o, $args)\n";
+#         my $desc = eval { from_json $args->[0] };
+#         my $e = $@;
+#         if($e) {
+#             # _report "Exception in (desc-from-string): JSON: $e\n$args->[0]";
+#             $o->throw($e);
+#         }
+#         return $desc;
+#     },
+# 
+    'desc-as-of/usage' => '(desc-as-of -date-) : Set retrieval date for future (desc-read) calls to -date-.',
+    'desc-as-of' => sub {
+        my ($o, $args) =   @_;
+        my ($date) = @$args;
+
+        if(defined $date) { $o->{'desc-read--as-of'} = $date }
+        else              { delete $o->{'desc-read--as-of'}  }
+    },
+
+    'desc-read/usage' => "(desc-read -var-name- -desc-name- [options]) : Return Descriptor -desc-name- (can be a URL), set var -var-name- to Desc.",
+    'desc-read' => sub {
+        my ($o, $args) = @_;
+        # printf STDERR (" >> (desc-read($o, $args) [%s])\n", join(',', @$args));
+
+
+        ##= Security checks == Don't run web-editable code unsafely! ===
+
+        my $bi   = $o->{builtinsMap};
+        my $vars = $o->{varMap}->{''};
+
+        map {
+            if(ref $bi->{$_} eq 'CODE') {
+                $o->eval("(bi-drop $_)", { });
+            }
+        } (qw( sys-fork sys-wait perl-eval init-interpreter));
+
+        my $k = ':interpreter:';
+        if(exists $vars->{$k} && ref $vars->{$k}->[0] eq 'PrimaLisp') {
+            $o->eval("(var-clear $k)", { });
+        }
+        
+        ##= Security checks =====
+
+
+        my ($descVarName, $descName, $options)  = @$args;
+        # print STDERR " >> (desc-read $descVarName $descName $options)\n";
+
+        $o->throw("No descriptor directory defined.")
+            unless defined $o->{descDir};
+
+        $o->throw("No descriptor name defined.")
+            unless defined $descName && $descName ne '';
+
+        if($descName =~ s/!$//) {
+            if(!defined $options) { $options = { } }
+            $options->{reload} = 1;
+        }
+
+        $o->throw("Unacceptable descriptor name '$descName'")
+            unless $descName =~ /^[-.~:\w%+]+$/ || $descName =~ /^http:\/\/[^'";]+$/;
+
+        # $o->_assertIsValidTypeName('descriptor name', $descName);
+
+
+        my $descFile = "$o->{descDir}/$descName";
+
+        # _report(['%s,  descriptor file: %s', $descName, $descFile]);
+
+        # Handle lookup misses when running in an inner interpreter?
+        if(! -f $descFile) {
+            my @f = glob "$o->{descDir}/.ii/lib[.-]*/$descName";
+            # _report(['%s, Glob\'d descriptor names: %s', $descName, join(':', @f)]);
+            
+            if(@f) {
+                $descFile = shift @f;
+                if(@f) {
+                    _report(['%s, Picked glob\'d descriptor name: %s', $descName, $descFile]);
+                    _report(['%s, Ignoring extra glob\'d descriptor names: %s', $descName, join(':', @f)]);
+                }
+            }
+        }
+
+        my @s = stat $descFile;
+        my $mtime = $s[9];
+        my $descmtime = $o->{descCache}->{$o->{namespace}}->{$descName}->{mtime};
+
+        if(defined $options->{reload} && $options->{reload}  ) { delete $o->{descCache}->{$o->{namespace}}->{$descName} }
+        if(defined $descmtime         && $descmtime != $mtime) { delete $o->{descCache}->{$o->{namespace}}->{$descName} }
+
+        my $desc = $o->{descCache}->{$o->{namespace}}->{$descName}->{desc};
+        if(defined $desc) {
+            return $o->eval("(= $descVarName \$_desc)", {_desc => $desc});
+        } 
+
+
+        my $fh;
+
+        if($descName =~ /^http:\/\//) {
+            $o->throw("Invalid URL '$descName'")
+                if $descName =~ /[\s'\\\$]/;
+
+            my $cmd = "wget --no-check-certificate -q -O - '$descName'";
+            # print $logFH " %> $cmd\n";
+            $fh = new FileHandle("$cmd |");
+        }
+        else {
+            $o->throw("No descriptor directory defined.")
+                unless defined $o->{descDir};
+
+
+            my $revision = $options->{'revision'};
+            my $asOf     = $options->{'as-of'};
+            $asOf = $o->{'desc-read--as-of'}
+                if exists $o->{'desc-read--as-of'};
+
+            if(defined $revision && $revision !~ /^[\d.]+$/) { $o->throw("Unacceptable option, revision: $revision'") }
+            if(defined $asOf     && $asOf     =~ /[;"']/)    { $o->throw("Unacceptable option, asOf: $asOf'") }
+
+
+               if(defined $revision) { $fh = new FileHandle("co -p -r'$revision' $descFile 2>/dev/null |") }
+            elsif(defined $asOf    ) { $fh = new FileHandle("co -p -d'$asOf'     $descFile 2>/dev/null |") }
+            else {
+                $fh = new FileHandle("< $descFile");
+            }
+
+            @s = stat $descFile;
+            $mtime = $s[9];
+        }
+
+
+        if(defined $fh) {
+            local $/ = undef;
+            my $string = <$fh>;
+            close $fh;
+
+            $desc = $o->descFromString($string);
+        }
+        elsif(defined $o->{outerInterp}) {
+            $desc = $o->{outerInterp}->eval('(desc-read _ $name)', {name => $descName});
+        }
+        else {
+            $desc = { _isNew => 1 };
+        }
+
+        unless($options->{'no-cache'}) {
+            $o->{descCache}->{$o->{namespace}}->{$descName}->{desc} = $desc;
+            $o->{descCache}->{$o->{namespace}}->{$descName}->{mtime} = $mtime if defined $mtime;
+        }
+
+        unless($options->{'no-on-load'} ) {
+            my $code = <<FINI;
+            (var-push self \$_desc) (var-push self/name \$_name) (var-push on-load)
+            (if (def-hash-fn \$self / on-load) (on-load))
+            // (= $descVarName (var-pop self) (hash name $descName))
+            (var-pop self) (var-pop self/name) (var-pop on-load)
+FINI
+            $o->evalAll($code, {_desc => $desc, _name => $descName});
+        }
+
+        $o->{varMapNS}->{ $descVarName      }->[0] = $desc;
+        $o->{varMapNS}->{"$descVarName/name"}->[0] = $descName;
+
+        return $desc;
+    },
+
+    'desc-write/usage' => "(desc-write -desc- -name- [options]) : Save descriptor -desc- to local name -name-, return descriptor",
+    'desc-write' => sub {
+        my ($o, $args) = @_;
+        # printf STDERR (" >> (desc-write($o, $args) [%s])\n", join(',', @$args));
+    
+        my ($desc, $descName, $options)  = @$args;
+        #TODO# sanitize these vars.
+        # _report(" >> (desc-write $desc $descName $options)");
+
+        $o->throw("No descriptor directory defined.")
+            unless defined $o->{descDir};
+
+        $o->throw("No descriptor name defined..")
+            unless defined $descName && $descName ne '';
+
+
+        $o->throw("Unacceptable descriptor name '$descName'")
+            unless $descName =~ /^[-.~:\w%+]+$/;
+        # $o->_assertIsValidTypeName('descriptor name', $descName);
+
+
+        my $newDFile = "$o->{descDir}/.new-$descName.$$";
+        my $descFile = "$o->{descDir}/$descName";
+
+        my $isNew = -f $descFile? 0: 1;
+
+        if(defined $desc) {
+            my $fh = new FileHandle("> $newDFile");
+
+            $o->throw("Can't write descriptor '$descName': $!")
+                unless defined $fh;
+
+            my $j = new JSON;
+            $json = eval { $j->pretty(1)->canonical(1)->utf8(1)->allow_nonref->encode($desc) };
+
+            _report([" !! Can't serialize descriptor %s: %s", $desc, $@])  if $@;
+            $o->throw("Can't serialize descriptor: $@")
+                if $@;
+
+            print $fh $json;
+            eval { close $fh };
+            rename $newDFile, $descFile;
+
+            my $id = '';
+
+            # Default is to do a checkpoint but for large or appended data descriptors it might not be wanted.
+            unless(defined $options->{'no-checkpoint'} && $options->{'no-checkpoint'}) {
+                # Checkpoint this edit.
+                my $cmd = '';
+                if($isNew) {
+                        # print STDERR " -- first time check in...\n";
+                        $cmd = "ci -q -l -t-auto-PrimaLisp-$id $descFile ;";
+                }
+                else {
+                        # print STDERR " -- been here.....\n";
+                }
+                $cmd = "$cmd rcs -q -l $descFile ; ci -q -f -mauto-PrimaLisp-$id -l $descFile";
+                # print STDERR " %> $cmd\n";
+                system $cmd;
+            }
+        }
+        else {
+            my $cmd = "ci -q -t-auto-PrimaLisp-cleared $descFile ;";
+            # print STDERR " %> $cmd\n";
+            system $cmd;
+        }
+
+
+
+#-#         my $notifyList = $o->{'dw-notifyList'}->{$descName};
+#-#         if(defined $notifyList) {
+#-#             $notifyList = $o->shuffleList($notifyList);
+#-# 
+#-#             my $code0 = <<FINI;
+#-#                 (= notify-list \$_notify-list)
+#-# 
+#-#                 (= prev-tid (go (map-list (fn (_)
+#-#                     (if (defined? ,\$prev-tid) (report 'prev-tid: %s, rc: %s' ,\$prev-tid (get ,\$prev-tid))) 
+#-#                     (report "+dwn: %s, class: %s, f: %f" \$_ (hash-get \$_ / .class) (hash-get \$_ / factor))
+#-#                     (catch (\$_ desc-was-updated) (report "_err: \$_err")))
+#-#                   \$notify-list)))
+#-# FINI
+#-# 
+#-#             my $code = <<FINI;
+#-# (report "Sending notifier daemon a message...  '\$_notify-list'")
+#-# (= resp (msg-send desc-write-notify (desc-to-string \$_notify-list)))
+#-# (report "Got response from daemon: \$resp")
+#-# \$resp
+#-# FINI
+#-# 
+#-#             my $v = $o->evalAll($code, { '_notify-list' => $notifyList });
+#-# 
+#-#             _report([ '(msg-send) returns: %s', $v]);
+#-#         }
+
+        return;
+    },
+
+#-#     'desc-write-notify/usage' => "(desc-write-notify -name- -to-notify- ...) : Notify interested parties -to-notify- when descriptor -name- has been updated.",
+#-#     'desc-write-notify' => sub {
+#-#         my ($o, $args) = @_;
+#-#         my $descName = shift @$args;
+#-# 
+#-#         _report(" >> (desc-write-notify $descName ...)");
+#-# 
+#-#         my $notifyList = $o->{'dw-notifyList'}->{$descName};
+#-#         if(!defined $notifyList) {
+#-#             $notifyList = [ ];
+#-#             $o->{'dw-notifyList'}->{$descName} = $notifyList;
+#-#         }
+#-# 
+#-#         map { _report([ 'a: %s', $_ ])} @$args;
+#-#         push @$notifyList, @$args;
+#-# 
+#-#         return;
+#-#     },
+#-# 
+#-#     'desc-write-notify-init/usage' => "(desc-write-notify-init) : Initialize notifier thread.",
+#-#     'desc-write-notify-init' => sub {
+#-#         my ($o, $args) = @_;
+#-#         _report(" >> (desc-write-notify-init)");
+#-# 
+#-#         if(exists $ENV{notifier_tid}) {
+#-#             _report("(desc-write-notify-init) was called but notifier_tid already set to '$ENV{notifier_tid}'");
+#-#             return;
+#-#         }
+#-# 
+#-# my $code = <<FINI;
+#-# (go
+#-#   (report ' ** Notifier daemon starting...')
+#-#   (while 1
+#-#     (var-set request (desc-from-string (msg-receive desc-write-notify)))
+#-#     (report ' -> got msg: %s' (desc-to-string \$request))
+#-#     (map-list (fn (_) 
+#-#         (report "++dwn: %s, class: %s, f: %f" \$_ (hash-get \$_ / .class) (hash-get \$_ / factor))
+#-#         (catch (\$_ desc-was-updated) (report "_err: \$_err")))
+#-#       \$request)
+#-#     (msg-reply desc-write-notify (desc-to-string (hash resp ok)))))
+#-# FINI
+#-# 
+#-#         $ENV{notifier_tid} = $o->eval($code, { });
+#-#         _report("(desc-write-notify-init) was called and notifier_tid set to '$ENV{notifier_tid}'");
+#-# 
+#-#         return;
+#-#     },
+
+
+    'desc-rlog/usage' => '(desc-rlog -name- [-options-]) : Return revision information on descriptor -name-.',
+    'desc-rlog' => sub {
+        my ($o, $args) = @_;
+
+        my ($descName, $options) = @$args;
+
+        $o->throw("No descriptor directory defined.")
+            unless defined $o->{descDir};
+
+        $o->throw("No descriptor name defined...")
+            unless defined $descName && $descName ne '';
+
+        $o->throw("Unacceptable descriptor name '$descName'")
+            unless $descName =~ /^[-.~:\w%+]+$/;
+        # $o->_assertIsValidTypeName('descriptor name', $descName);
+
+
+        my $descFile = "$o->{descDir}/$descName";
+
+        my $cmd = "cd $o->{descDir} && rlog $descName";
+
+        # _report(" %> $cmd");
+        my $resp = `$cmd 2>&1`;
+        if($?) { $o->throw("Can't get rlog info ($?): $!, resp: $resp") }
+
+        my $out = [ split /\n-+\n/s, $resp ];
+
+        my $hdr = shift @$out;
+
+        $hdr = [ grep { $_ } split /\n+|\t+/, $hdr ];
+
+        map { $_ = [ split /;\s*|\n+|\t+/, $_ ] } @$out;
+
+        map {
+            my $rec = $_;
+            my $rec2 = { };
+
+            map { 
+                my $str = $_;
+
+                   if($str =~ /^(.*):\s+(.*)$/) { $rec2->{$1}        = $2   }
+                elsif($str =~/^revision (.*)$/) { $rec2->{revision}  = $1   }
+                else                            { $rec2->{'log-msg'} = $str }
+            } @$rec;
+
+            my $date = $rec2->{date};
+            if(defined $date) {
+                $rec2->{'time'} = cnvt_date_to_time($date);
+                # _report(['date: %s, time: %d, date: %s', $date, $rec2->{'time'}, scalar(localtime($rec2->{time}))]);
+            }
+
+            $rec2->{'desc-name'} = $descName;
+            $_ = $rec2;
+        } @$out;
+
+        return { hdr => $hdr, rlog => $out };
+
+    },
+
+    'desc-rlog-diff-rec/usage' => '(desc-rlog-diff-rec -rlog-rec-) : Used internally.',
+    'desc-rlog-diff-rec' => sub {
+        my ($o, $args) = @_;
+
+        my ($rec, $options) = @$args;
+
+        if(!defined $rec) {
+            my $OO = $o->{'desc-rlog-diff-rec:OO'};
+
+            my $wk = $OO->{'wk-log'};
+            $OO->{'wk-log'} = { map { $_ => sprintf('%.2f', $wk->{$_}/3600) } keys %$wk };
+
+            my $oo = {
+                t0          => undef,
+                'prev-t'    => undef,
+                'ttl-t'     => 0,
+                bin         => [ ],
+                out         => [ ],
+                'n-items'   => 0,
+                'bin-diffs' => { },
+                'min-span'  => 15 * 60,
+
+                'wk-log'    => { },
+            };
+
+            if(defined $options && ref $options eq 'HASH') { map { $oo->{$_} = $options->{$_}  } keys %$options }
+
+            $o->{'desc-rlog-diff-rec:OO'} = $oo;
+
+            return $OO;
+        }
+
+
+        my $OO = $o->{'desc-rlog-diff-rec:OO'};
+
+        my $t0       = $OO->{t0};
+        my $prevT    = $OO->{'prev-t'};
+        my $ttlT     = $OO->{'ttl-t'};
+        my $bin      = $OO->{bin};
+        my $out      = $OO->{out};
+        my $minSpan  = $OO->{'min-span'};
+        my $nItems   = $OO->{'n-items'};
+        my $binDiffs = $OO->{'bin-diffs'};
+        my $wkLog    = $OO->{'wk-log'};
+
+        # _report("t0: $t0, prevT: $prevT, ttlT: $ttlT, bin: $bin, out: $out, minSpan: $minSpan, nItems: $nItems, binDiffs: $binDiffs");
+
+        my $t = $rec->{'time'};
+
+        if(defined $prevT) {
+            # Records are presented in reverse time order!
+
+            if($prevT - $t > $minSpan) {
+                my $dt = $t0 - $prevT + $minSpan;
+                $ttlT += $dt;
+
+                my $frDate = cnvt_time_to_iso_8601_date($prevT);
+                my $toDate = cnvt_time_to_iso_8601_date($t0);
+
+                unshift @$bin, {
+                    dt            => $dt,
+                    duration      => 0 + sprintf('%.3f', $dt/3600),
+                    'n-edits'     => $nItems,
+
+                    'interval-fr' => $frDate,
+                    'interval-to' => $toDate,
+
+                    diffs         => [ sort keys %$binDiffs ],
+                };
+
+                push @$out, $bin;
+
+                my $dayDate = $frDate;
+                $dayDate =~ s/T.*$//;
+
+                $wkLog->{$dayDate} += $dt;
+
+                $bin      = [ ];
+                $binDiffs = { };
+                undef    $t0;
+                $nItems   = 0;
+            }
+    
+        }
+
+        if(!defined $t0) { $t0 = $t }
+
+        # push @$bin, $rec;
+
+        ++$nItems;
+
+        $binDiffs->{$rec->{'desc-name'}} = 1;
+
+        $prevT = $t;
+
+
+
+        $OO->{t0}          = $t0;
+        $OO->{'prev-t'}    = $prevT;
+        $OO->{'ttl-t'}     = $ttlT;
+        $OO->{bin}         = $bin;
+        $OO->{out}         = $out;
+        $OO->{'n-items'}   = $nItems;
+        $OO->{'bin-diffs'} = $binDiffs;
+
+        return;
+    },
+
+
+    'desc-test/usage' => '(desc-test -desc-name-) : Run tests on descriptor -desc-name-.',
+    'desc-test' => '(fn (d-name)
+      // Get a clean environment to test in.
+      // Need to make sure we have an clean env here, not with stuff from last time.
+      //  1. put a timestamp in the name and do periodic cleanup...
+      //  2. provide an option to ii-new that zaps the space...
+
+      (= ii (ii-new "Test-$d-name"))
+
+      // Load the test subject into test env.
+      (desc-read D $d-name {no-on-load 1})
+
+      (ii-eval $ii $[D d-name]
+        (desc-write $D $d-name {no-checkpoint 1}))
+
+
+      // Load the descriptor in the test env
+      // See what it needs mocked.
+
+      (ii-eval $ii $[d-name]
+        (= d-name $d-name)
+
+        (= pre-vars  (sort-alpha (hash-keys $:vars: /)))
+        (desc-read D $d-name)
+        (= post-vars (sort-alpha (hash-keys $:vars: /)))
+
+        // Let\'s see what functions were defined..
+      
+        (= diffs (list-diff $pre-vars $post-vars))
+      
+        (= new-vars   (hash-get $diffs / in-2))
+
+        (= new-fns
+          (grep (fn (_) (ne on-load $_))
+            (map-list (fn (_) (substr $_ 0 -5))
+              (grep (fn (_) (&& (defined? $$_) (eq /path (substr $_ -5))))
+                $new-vars))))
+      
+        (= diff-2 (list-diff $new-vars $new-fns))
+      
+        $[ d-name new-fns ]
+      ))',
+
+
+#------------------------------------------
+
+
+#!!#  (pm-new and pm-call might be wide open security holes waiting to happen!!!!!
+    'pm-new/usage' => "(pm-new ClassName Args ...) : Return a new instance of interpreter class ClassName, passing it Args.",
+    'pm-new' => sub {
+        my ($o, $args) = @_;
+
+        my $className = shift @$args;
+        $o->throw("Invalid className '$className'")
+            unless $className =~ /^(([\w]|::)+)$/;
+
+        $o->throw("Class '$1' not on the white list.")
+            unless exists $pmClassWhiteList->{$1};
+
+        my $code = sprintf 'use %s; new %s(@$args)', $className, $className;
+        # print STDERR " %> $code\n";
+        my $inst = eval $code;
+        $o->throw() if $@;
+
+        return $inst;
+    },
+
+#!!#  (pm-new and pm-call might be wide open security holes waiting to happen!!!!!
+    'pm-call/usage' => "(pm-call inst methodName Args ...) : Call method on interpreter object",
+    'pm-call' => sub {
+        my ($o, $args) = @_;
+        my $inst       = shift @$args;
+        my $methodName = shift @$args;
+
+#----------
+        $o->throw("Invalid instance '$inst' $methodName")
+            unless (scalar $inst) =~ /^(.*)=/;
+        my $class = $1;
+#----------
+#       $class = $inst;
+#----------
+
+        $o->throw("Class '$class' not on the white list..")
+            unless exists $pmClassWhiteList->{$class};
+
+        $o->throw("Invalid method '$methodName'")
+            unless $methodName =~ /^[\w]+$/;
+
+        #TODO# sanitize the args?
+
+        # print STDERR " -- inst: $inst, methodName: $methodName\n";
+        # map { print STDERR " -- "arg: <|$_|>" \n" } @$args;
+
+        my $code = sprintf '$inst->%s(@$args)', $methodName;
+        # print STDERR " %> $code\n";
+        my $value = eval $code;
+        $o->throw() if $@;
+        # print STDERR " -- value: <|$value|>\n";
+
+        return $value;
+    },
+
+#!!#  (pm-new and pm-call might be wide open security holes waiting to happen!!!!!
+    'pm-call-list/usage' => "(pm-call-list inst methodName Args ...) : Call method on interpreter object. Return a list.",
+    'pm-call-list' => sub {
+        my ($o, $args) = @_;
+        my $inst       = shift @$args;
+        my $methodName = shift @$args;
+
+#----------
+        $o->throw("Invalid instance '$inst' $methodName")
+            unless (scalar $inst) =~ /^(.*)=/;
+        my $class = $1;
+#----------
+#       $class = $inst;
+#----------
+
+        $o->throw("Class '$class' not on the white list..")
+            unless exists $pmClassWhiteList->{$class};
+
+        $o->throw("Invalid method '$methodName'")
+            unless $methodName =~ /^[\w]+$/;
+
+        #TODO# sanitize the args?
+
+        # print STDERR " -- inst: $inst, methodName: $methodName\n";
+        # map { print STDERR " -- "arg: <|$_|>" \n" } @$args;
+
+        my @value;
+        my $code = sprintf '@value = $inst->%s(@$args)', $methodName;
+        # print STDERR " %> $code\n";
+        eval $code;
+        $o->throw() if $@;
+        # map { print STDERR " -- value: <|$_|>\n" } @value;
+
+        return \@value;
+    },
+#!!#  (pm-new and pm-call might be wide open security holes waiting to happen!!!!!
+
+# signal
+
+
+    #------------------------------------------------------------------------------------
+
+    'pp-set/usage' => '(pp-set -name- -value- -blend-f-) : Sets the performance plot parameter -name- to -value- using optional -blend-f-.',
+    'pp-set' => sub {
+        my ($o, $args) = @_;
+
+        my ($name, $value, $bf) = @$args;
+
+        # $o->throw(" !! Invalid parameter name '$name'") unless $name =~ /^[-.\w]+$/;
+        $o->_assertIsValidTypeName('parameter name', $name);
+
+        my $dir = "$o->{descDir}/.pp";
+        unless(-d $dir) { mkdir $dir }
+
+        my $path = "$dir/$name";
+
+        my $fh = new FileHandle("> $path.$$");
+        return unless defined $fh;
+
+
+        if(defined $bf) {
+            my $prev = -s $path;
+
+            $value = $bf * $prev + (1-$bf) * $value;
+        }
+
+        $value = int($value + 0.5);
+        
+        if($value > 0) {
+            seek $fh, $value-1, 0;
+            print $fh "\0";
+        }
+        close $fh;
+
+        rename "$path.$$", $path;
+
+        return;
+    },
+
+    #------------------------------------------------------------------------------------
+
+    'hostname/usage' => '(hostname) : Return this host\'s name.',
+    'hostname' => sub { my $n = `/bin/hostname`; chomp $n; return $n },
+
+    'rcs-rev/usage' => '(rcs-rev) : Return the RCS revision of Core.dpli.',
+    'rcs-rev' => sub { (split /\s+/, '$Revision: 1.327 $')[1] },
+
+    'rcs-vers/usage' => '(rcs-vers -desc-) : Return the RCS revision and date, if any, of the given descriptor.',
+    'rcs-vers' => sub { if(my @id = split(' ', $_[1]->[0]->{'rcs-id'})) { sprintf('%s-%s', $id[2], $id[3]) } },
+
+
+    #------------------------------------------------------------------------------------
+
+
+    'gzip/usage' => '(gzip -data-) : Return gzip\'d form of -data-',
+    'gzip' => sub {
+        my ($o, $args) = @_;
+        return Compress::Zlib::memGzip($args->[0]);
+    },
+
+    'gunzip/usage' => '(gunzip -data-) : Return gunzip\'d form of -data-',
+    'gunzip' => sub {
+        my ($o, $args) = @_;
+        return Compress::Zlib::memGunzip($args->[0]);
+    },
+
+    'base64-encode/usage' => '(base64-encode -data-) : Return base64 encoded form of -data-',
+    'base64-encode' => sub {
+        my ($o, $args) = @_;
+        my $val = encode_base64($args->[0]);
+        if(defined $args->[1]) {
+            $val =~ s/\+/-/g;
+            $val =~ s/\//_/g;
+        }
+        return $val;
+    },
+
+    'base64-decode/usage' => '(base64-decode) : Return base64 decoded form of -data-',
+    'base64-decode' => sub {
+        my ($o, $args) = @_;
+        my $val = $args->[0];
+        if(defined $args->[1]) {
+            $val =~ s/-/\+/g;
+            $val =~ s/_/\//g;
+        }
+        return decode_base64($val);
+    },
+
+    'hex-encode/usage' => '(hex-encode -data-) : Return hexidecimal encoded form of -data-',
+    'hex-encode' => sub {
+        my ($o, $args) = @_;
+        return unpack "H*", $args->[0];
+    },
+
+    'hex-decode/usage' => '(hex-decode) : Return hexidecimal decoded form of -data-',
+    'hex-decode' => sub {
+        my ($o, $args) = @_;
+        return pack "H*", $args->[0];
+    },
+
+    'md5-digest/usage' => '(md5-digest -data- ...) : Return MD5 digest of -data-',
+    'md5-digest' => sub {
+        my ($o, $args) = @_;
+
+        my $ctx = new Digest::MD5;
+        # while(@$args) { $ctx->add(encode_utf8(shift @$args)) };
+        while(@$args) { $ctx->add(shift @$args) };
+        my $id = $ctx->hexdigest;
+
+        return $id;
+    },
+
+    'sha-digest/usage' => '(sha-digest -alg- -data- ...) : Return sha256 digest of -data-',
+    'sha-digest' => sub {
+        my ($o, $args) = @_;
+
+        my $alg = shift @$args;
+        $alg = '256' unless defined $alg;
+
+        my $ctx = new Digest::SHA($alg);
+        # while(@$a) { $ctx->add(encode_utf8(shift @$args)) };
+        while(@$a) { $ctx->add(shift @$args) };
+        my $id = $ctx->hexdigest;
+
+        return $id;
+    },
+
+    'sha256-digest/usage' => '(sha256-digest -data- ...) : Return sha256 digest of -data-',
+    'sha256-digest' => sub {
+        my ($o, $args) = @_;
+
+        my $ctx = new Digest::SHA(256);
+        # while(@$args) { $ctx->add(encode_utf8(shift @$args)) };
+        while(@$args) { $ctx->add(shift @$args) };
+        my $id = $ctx->hexdigest;
+
+        return $id;
+    },
+
+
+    #------------------------------------------------------------------------------------
+
+    'mime-parse/usage' => '(mime-parse -content-) : .',
+    'mime-parse' => sub {
+        my ($o, $args) = @_;
+        my ($content) = @$args;
+
+        my ($delim, $headers);
+
+        if($content =~ s/^(.*?)\r\n(((.*?)\r\n)*)\r\n//s) {
+            ($delim, $headers) = ($1, $2);
+        }
+        if(defined $delim) { $content =~ s/\r\n$delim.*$//s }
+
+        $headers = { map { split(': ', $_) } split(/\r\n/, $headers) };
+
+        my $cd = $headers->{'Content-Disposition'};
+        delete $headers->{'Content-Disposition'};
+
+        $cd = { map { my ($n, $v) = (split '=', $_); $v =~ s/^"(.*)"$/$1/; $n => $v } split('; ', $cd) };
+
+        return { data => $content, 'Content-Disposition' => $cd, headers => $headers };
+
+#         my $parser = eval "use MIME::Tools; use MIME::Parser; new MIME::Parser";
+#         $o->throw("Can't parse incoming MIME content: $@") if $@;
+# 
+# 
+#         my $tmpDir = "/tmp/.mime-parse.$$";
+#         mkdir $tmpDir, 0755;
+# 
+# 
+#         $parser->output_dir($tmpDir);
+# 
+#         my $entity = $parser->parse_data(\$content);
+# 
+#         unlink glob "$tmpDir/$ignorePref-*";
+# 
+#         my $bh = $entity->bodyhandle;
+#         if(defined $bh) {
+#             _report([' ## Using single body...']);
+#         }
+#         else {
+#             @parts = $entity->parts;
+# 
+#             _report([' ## Using multi-part (%d) body...', scalar @parts]);
+# 
+#             $bh = $parts[0]->bodyhandle;
+# 
+#             #!# We're only taking the first 'part' for now...
+# 
+#             $o->throw("Can't get multi-part bodies:$!")
+#                 unless defined $bh;
+#         }
+# 
+#         my $bfh = eval { $bh->open('r') };
+#         if($@) {
+#             # return if $@ =~ /No such file or directory/;
+#             $o->throw("Can't open (ex) MIME::Body: $!");
+#         }
+# 
+#         $o->throw("Can't open (un) MIME::Body: $!")
+#             unless defined $bfh;
+# 
+# 
+#         { local $/ = undef; $content = <$bfh> }
+# 
+#         $bfh->close;
+# 
+#         unlink glob "$tmpDir/*";
+#         rmdir $tmpDir;
+# 
+# 
+#         if(defined $delim) { $content =~ s/\r\n$delim.*$//s }
+#     
+#         return { data => $content, 'mime-type' => $entity->mime_type(), 'effective-type' => $entity->effective_type() };
+
+    },
+
+    #------------------------------------------------------------------------------------
+
+
+    'dbi-connect/usage' => '(dbi-connect -data-source- -username- -password- -attr- : Return a database connection.',
+    'dbi-connect' => sub {
+        my ($o, $args) = @_;
+        my ($data_source, $username, $password, $attr) = @$args;
+
+        my $code = sprintf 'use DBI; DBI->connect($data_source, $username, $password, $attr)';
+
+        my $val = eval $code;
+        if($@) { $o->throw($@) }
+
+        return $val;
+    },
+
+    'dbi-prepare/usage' => '(dbi-prepare -sql-) : Prepare SQL statement.',
+    'dbi-prepare' => sub {
+        my ($o, $args) = @_;
+        my ($dbh, $sql) = @$args;
+
+        my $val = $dbh->prepare($sql);
+        my $errstr = $dbh->errstr;
+        $o->throw("DBI error: $errstr") if defined $dbh->err;
+        return $val;
+    },
+
+    'dbi-quote/usage' => '(dbi-quote -dbh- -str-) : Quote string for use in a SQL statement.',
+    'dbi-quote' => sub {
+        my ($o, $args) = @_;
+        my ($dbh, $str) = @$args;
+
+        my $val = $dbh->quote($str);
+        my $errstr = $dbh->errstr;
+        $o->throw("DBI error: $errstr") if defined $dbh->err;
+        return $val;
+    },
+
+    'dbi-disconnect/usage' => '(dbi-disconnect -dbh-) : Disconnect db.',
+    'dbi-disconnect' => sub {
+        my ($o, $args) = @_;
+        my ($dbh) = @$args;
+
+        return $dbh->disconnect;
+    },
+
+    'dbi-db/usage' => '(dbi-db -dbh- -method- -args-) : DBI interface.',
+    'dbi-db' => sub {
+        my ($o, $args) = @_;
+        my $dbh    = shift @$args;
+        my $method = shift @$args;
+
+        $o->throw("Invalid method name '$method'")  unless $method =~ /^\w+$/;
+
+        my $code = sprintf '$dbh->%s(@$args)', $method;
+
+        my $val = eval $code;
+        my $errstr = $dbh->errstr;
+        $o->throw("DBI error: $errstr") if defined $err;
+        return $val;
+    },
+
+    'dbi-st/usage' => '(dbi-st -sth- -method- -args-) : DBI interface.',
+    'dbi-st' => sub {
+        my ($o, $args) = @_;
+        my $sth    = shift @$args;
+        my $method = shift @$args;
+
+        $o->throw("Invalid method name '$method'")  unless $method =~ /^\w+$/;
+
+        my $code = sprintf '$sth->%s', $method;
+
+        my $val = eval $code;
+        return $val;
+    },
+
+    'dbi-st-list/usage' => '(dbi-st-list -sth- -method- -args-) : DBI interface.',
+    'dbi-st-list' => sub {
+        my ($o, $args) = @_;
+        my $sth    = shift @$args;
+        my $method = shift @$args;
+
+        $o->throw("Invalid method name '$method'")  unless $method =~ /^\w+$/;
+
+        my $code = sprintf '$sth->%s', $method;
+
+        my @list = eval $code;
+        return \@list;
+    },
+
+    #------------------------------------------------------------------------------------
+    # Code maintenance
+
+    'search-code/usage' => '(search-code -regexp- [-desc-pattern-]) : Return list of -regexp- matches over all (or specified) descriptor code.',
+    'search-code' => sub {
+        my ($o, $args) = @_;
+        my ($regexp, $descPattern) = @$args;
+
+        $o->throw("Wouldn't it be nice if (search-code) was implemented :( ");
+
+        return;
+    },
+
+    'diff/usage' => '(diff -text-1- -text-2- [-options-]) : Return line differences between -text-1- and -text-2-.',
+    'diff' => sub {
+        my ($o, $args) = @_;
+        my ($text1, $text2, $options) = @$args;
+
+        my $file1 = "/tmp/.dpl-diff.$$.1";
+        my $fh1 = new FileHandle("> $file1");
+        print $fh1 encode_utf8($text1);
+        close $fh1;
+
+        my $file2 = "/tmp/.dpl-diff.$$.2";
+        my $fh2 = new FileHandle("> $file2");
+        print $fh2 encode_utf8($text2);
+        close $fh2;
+
+        my $raw = [ split /\n/, `diff $file1 $file2 ; rm -f $file1 $file2` ];
+
+
+        my $out = [ ];
+        my $sub;
+        my $subsub;
+
+        for $line (@$raw) {
+            if($line =~ /^\d/) {
+                push @$sub, $subsub if defined $subsub;
+                push @$out, $sub if defined $sub;
+                $sub = [ $line ];
+                $subsub = [ ];
+            }
+            elsif($line eq '---') {
+                push @$sub, $subsub if defined $subsub;
+                $subsub = [ ];
+            }
+            else {
+                push @$subsub, $line;
+            }
+        }
+
+        push @$sub, $subsub if defined $subsub;
+        push @$out, $sub if defined $sub;
+
+        # return { out => $out, raw => $raw };
+        return $out;
+    },
+
+    #------------------------------------------------------------------------------------
+
+    'rand-word/usage' => '(rand-word) : Return a random word.',
+    'rand-word' => sub {
+        my ($o, $args) = @_;
+
+        my $list = $o->{'rand-word.list'};
+        unless(defined $list) {
+            my $fh = new FileHandle("< /usr/share/dict/words");
+            if(defined $fh) {
+                my @list = map { chomp; decode_utf8 $_ } <$fh>;
+                close $fh;
+                $list = \@list;
+                $o->{'rand-word.list'} = $list;
+            }
+        }
+
+        my $i = int(rand() * scalar @$list + 0.5);
+
+        return $list->[$i];
+    },
+
+    'rand-guid/usage' => '(rand-guid) : Return a random GUID.',
+    'rand-guid' => sub {
+        my ($o, $args) = @_;
+
+        my $fh = new FileHandle("< /dev/urandom");
+
+        my $buf = '';
+        read($fh, $buf, 16);
+        close $fh;
+
+        my $guid = unpack "h32", $buf;
+
+        unless($guid =~ s/^(.{8})(.{4})(.{4})(.{4})(.{12})$/$1-$2-$3-$4-$5/) {
+            $o->throw(" !! Can't format GUID from id '$id'");
+        }
+
+        return $guid;
+    },
+
+    'rand-data/usage' => '(rand-data [-len-]) : Return -len- bytes of of random data, default: 32',,
+    'rand-data' => sub {
+        my ($o, $args) = @_;
+        my ($len) = @$args;
+
+        $len = 32 unless defined $len;
+
+        my $fh = new FileHandle("< /dev/urandom");
+
+        my $buf = '';
+        read($fh, $buf, $len);
+        close $fh;
+
+        return $buf;
+    },
+
+    #------------------------------------------------------------------------------------
+
+    'dbm-open/usage' => '(dbm-open -name- -options-) : Return a hash bound to DBM file identified by -name-.',
+    'dbm-open' => sub {
+        my ($o, $args) = @_;
+        my ($name, $options) = @$args;
+
+        if(!exists $o->{__dbm_ok_name__} || $name ne $o->{__dbm_ok_name__}) {
+            $o->throw("Invalid dbm-open name '$name'")  unless $name =~ /^[\w.-]+$/;
+        }
+
+        my $fDir  = sprintf '%s/.dpl-dbm', $o->{descDir};
+        my $fName = sprintf '%s/%s',  $fDir, $name;
+
+        my $dbm = $dbmMap{$name};
+        if(defined $dbm) {
+            dbmclose %$dbm;
+            delete $dbmMap{$name};
+            undef $dbm;
+        }
+
+        if(!defined $dbm) {
+            $dbm = { };
+            my $mode = $options->{mode};
+
+               if(!defined $mode) { $mode = 0666 }
+            elsif($mode eq 'rw')  { $mode = 0666 }
+            elsif($mode eq 'r')   { $mode = 0444 }
+            else { $o->throw("Unkown dbm mode '$mode'") }
+
+            if(! -d $fDir) { mkpath $fDir }
+            chmod 0777, $fDir;
+
+            if($mode == 0666 && !-f $fName && !-w $fDir) {
+                my $ls = `ls -lLd $fDir`;  chomp $ls;
+                $o->throw("check perms on unwritable dbm dir we need to write to: $ls");
+            }
+
+            ## Need to create a dbm file that is group writable.
+            my $oUmask = umask();
+            umask(002);
+            my $rc = dbmopen %$dbm, $fName, $mode;
+            umask($oUmask);
+
+            unless(defined $rc) {
+                _report(['dbmopen %s, rc: %s, err: %s', $name, $rc, $!]);
+                $o->throw("dbm-open not opening...");
+            }
+            $dbmMap{$name} = $dbm;
+        }
+
+        return $dbm;
+    },
+
+    'dbm-close/usage' => '(dbm-close -name-) : Close DBM file identified by -name-.',
+    'dbm-close' => sub {
+        my ($o, $args) = @_;
+        my ($name, $options) = @$args;
+
+        if(!exists $o->{__dbm_ok_name__} || $name ne $o->{__dbm_ok_name__}) {
+            $o->throw("Invalid dbm-close name '$name'")  unless $name =~ /^[\w.-]+$/;
+        }
+
+        my $dbm = $dbmMap{$name};
+        if(defined $dbm) {
+            dbmclose %$dbm;
+            delete $dbmMap{$name};
+        }
+        return;
+    },
+
+    'dbm-atomic/usage' => '(dbm-atomic -dbm-name- -options- -exprs- ...) : Atomically perform a DBM operation.',
+    'dbm-atomic/ismacro' => 1,
+    'dbm-atomic' => '(fn (_dbm-name options &exprs -- dbm ret gensym-expr gensym-options)
+        (= options   (eval $options))
+        (= _dbm-name (eval $_dbm-name))
+
+        (= gensym-exprs   (concat exprs   (time)))
+        (= gensym-options (concat options (time)))
+
+        (= $gensym-exprs   $exprs)
+        (= $gensym-options $options)
+
+        (atomic $_dbm-name $,$gensym-options
+          (= dbm (dbm-open $_dbm-name $,$gensym-options))
+          (= ret (catch (eval-all $,$gensym-exprs)))
+          (dbm-close $_dbm-name)
+          (if (defined? $_err) (throw $_err))
+          $ret))',
+
+
+    #------------------------------------------------------------------------------------
+
+    'html-tidy/usage' => '(html-tidy -html- -level-) : Tidy up HTML before parsing.',
+    'html-tidy' => sub {
+        my ($o, $args) = @_;
+        my ($html, $level) = @$args;
+
+        if(!defined $level || $level >= 0) {
+            my $fh;
+            my $tmpFile = "/tmp/.dpl-tidy.$$";
+            $fh = new FileHandle("| tidy -quiet -numeric -asxml > $tmpFile");
+            print $fh $html;
+            close $fh;
+
+            $fh = new FileHandle("< $tmpFile");
+            { local $/ = undef; $html = <$fh> }
+            close $fh;
+
+            unlink $tmpFile;
+        }
+
+        if(defined $level && $level) {
+            $html =~ s~<!DOCTYPE [^>]+>~~s;
+            $html =~ s~<html([^>]*)\sxmlns="http://www.w3.org/1999/xhtml"([^>]*)>~<html$1$2>~;
+
+            if(abs($level) > 1) {
+                $html =~ s/<script\s.*?<\/script>//gs;
+            }
+
+            if(abs($level) > 2) {
+                # $html =~ s/\&([^a]([^m]([^p]([^;])?)?)?)?/\&amp;$1/gs;
+                $html =~ s/\&/\&amp;/gs;
+                $html =~ s/<header>/<div>/gs;
+                $html =~ s/<\/header>/<\/div>/gs;
+                $html =~ s/<!--.*?-->//gs;
+                $html =~ s/<!-->//gs;
+                $html =~ s/<link\s[^>]+>//gs;
+                $html =~ s/<meta\s[^>]+>//gs;
+                # $html =~ s/<head\s[^>]+>//gs;
+                $html =~ s/<style\s.*?<\/style>//gs;
+                $html =~ s/<img\s.*?\/>//gs;
+
+                # Quote unquoted HTMLid attributes.
+                my $n = 0;
+                # while($html =~ s/<([^>]+)([\w-]+)=([\w.-]+)/<$1$2="$3"/gs) { ++$n }
+                while($html =~ s/ id=([\w.-]+)/ id="$1"/gs) { ++$n }
+                while($html =~ s/ _sp=([\w.-]+)/ _sp="$1"/gs) { ++$n }
+                while($html =~ s/ class=([\w.-]+)/ class="$1"/gs) { ++$n }
+                while($html =~ s/ type=([\w.-]+)/ type="$1"/gs) { ++$n }
+                while($html =~ s/ name=([\w.-]+)/ name="$1"/gs) { ++$n }
+                while($html =~ s/ value=([\w.-]+)/ value="$1"/gs) { ++$n }
+                while($html =~ s/ size=([\w.-]+)/ size="$1"/gs) { ++$n }
+                while($html =~ s/ autocomplete=([\w.-]+)/ autocomplete="$1"/gs) { ++$n }
+                while($html =~ s/ maxlength=([\w.-]+)/ maxlength="$1"/gs) { ++$n }
+                # _report(['n: %d', $n]);
+            }
+        }
+
+        # _report(['%s', substr($html, 0, 200)]);
+
+        return $html;
+    },
+
+    #------------------------------------------------------------------------------------
+
+    'true/usage' => '(true) : Returns JSON true value.',
+    'true' => sub { JSON::true },
+
+    'false/usage' => '(false) : Returns JSON false value.',
+    'false' => sub { JSON::false },
+
+    'null/usage' => '(null) : Returns JSON null value.',
+    'null' => sub { JSON::null },
+
+    #------------------------------------------------------------------------------------
+
+    'ip-addr-to-dns-name/usage' => '(ip-addr-to-dns-name -addr-) : Do a reverse IP address to DNS hostname lookup.',
+    'ip-addr-to-dns-name' => sub {
+        my ($o, $args) = @_;
+
+        my ($addr) = @$args;
+
+        my $raw = `/usr/bin/dig -x $addr | grep -v '^;'`;
+
+        my $host = $addr;
+        if($raw =~ /PTR\s+(.*)\.\n/) {
+            $host = $1;
+
+            $host =~ s/\.indimensions\.com//;
+        }
+
+        return $host;
+    },
+
+    'dns-name-to-ip-addr/usage' => '(dns-name-to-ip-addr -name-) : Do a DNS hostname lookup, return IP address if any.',
+    'dns-name-to-ip-addr' => sub {
+        my ($o, $args) = @_;
+
+        my ($name) = @$args;
+
+        my $raw = `/usr/bin/dig $name | grep -v '^;'`;
+
+        my $host = $addr;
+        if($raw =~ /IN\s+A\s+(.*)\n/) {
+            $addr = $1;
+        }
+
+        return $addr;
+    },
+
+    #------------------------------------------------------------------------------------
+
+    'atomic/usage' => '(atomic -name- -options- -exprs- ...) : Evaluate -exprs- mutually exclusively with respect to -name-.',
+    'atomic/ismacro' => 1,
+    'atomic' => '(fn (name options &exprs -- ret lxk cs)
+        (= name  (eval $name))
+        (= lxk "${name}-lk-var")
+        #(= cs (callstack))
+        #(report-vars . name lxk cs (= A A))
+
+        (lock-acquire $name $lxk (eval $options))
+        (= ret (catch
+                 (eval-all $exprs)
+                 (do
+                   #(report-vars . name lxk cs (= B B))
+                   (lock-release $lxk)
+                   (throw $_err))))
+
+        #(report-vars . name lxk cs (= C C))
+        (lock-release $lxk)
+        $ret)',
+
+    #------------------------------------------------------------------------------------
+
+    'assert/usage' => '(assert -blurb- -condition-) : Throw an assertion failure if -condition- is false.',
+    'assert/ismacro' => 1,
+    'assert' => '(fn (blurb cond -- ret) (if (! (eval $cond)) (throw (sprintf \'Assertion failed: %s -- %s\' $cond (eval $blurb)))))',
+
+
+    #------------------------------------------------------------------------------------
+
+    'fn-encap/usage' => '(fn-encap -desc-) : Return a function that returns -desc-.',
+    'fn-encap' => "(fn (desc)
+      (report ' >> (fn-encap ...)')
+      (sprintf '(fn () (desc-from-string (gunzip (base64-decode (join \\' \\'\\n%s)))))'
+        (base64-encode (gzip (desc-to-string \$desc)))))",
+
+    #------------------------------------------------------------------------------------
+
+    'fn-wrap/usage' => '(fn-wrap -fn-name- -pre-fn- -post-fn-) : Wrap a function call.',
+    'fn-wrap/ismacro' => 1,
+    'fn-wrap' => '(fn (fn-name pre-fn post-fn)
+        (= fn-name (eval $fn-name))
+        (var-push $fn-name 
+            ((fn (fn-name pre post -- fn-fmt)
+            (= fn-fmt (expr
+                (fn (&args -- val fn-self)
+                (if (defined? %s) (%s $args))
+                (= fn-self (var-pop %s))
+                (= val (%s @$args))
+                (var-push $fn-self)
+                (if (defined? %s) (= val (%s $val)))
+                $val)))
+        
+            (sprintf $fn-fmt
+                $pre $pre
+                $fn-name
+                $fn-name
+                $post $post
+            ))
+        
+            $fn-name $pre-fn $post-fn)))',
+
+    #------------------------------------------------------------------------------------
+
+    'report-lines/usage' => '(report-lines -pos-) : Return lines from log file starting at pos -pos- and going to end of file.',
+    'report-lines' => sub {
+        my ($o, $args) = @_;
+        my ($pos) = @$args;
+        return if $pos < 0;
+
+        return; ###################
+
+        my @lines = ();
+
+        my $fh = new FileHandle("< $o->{descDir}/.dplx.log");
+        $o->throw("Can't open log file: $!") unless defined $fh;
+        return unless defined $fh;
+
+        seek $fh, $pos, 0;
+
+        while(<$fh>) {
+            $pos += length $_;
+            chomp;
+            push @lines, decode_utf8($_);
+        }
+
+        close $fh;
+
+        return { 'pos' => $pos, lines => \@lines };
+    },
+
+    #------------------------------------------------------------------------------------
+
+    'fortune/usage' => '(fortune) : Return a fortune; random text for testing....',
+    'fortune' => sub {
+        my ($o, $args) = @_;
+
+        my $path = '/usr/games/fortune';
+
+        $o->throw(" !! No fortune program on this box?  c'mon...")
+            unless -x $path;
+
+        return `$path`;
+    },
+
+    #------------------------------------------------------------------------------------
+
+    'xml-parse/usage' => '(xml-parse -xml-text-) : Parse  a string of XML, and return a DOM.',
+    'xml-parse' => '(fn (xml) ((pm-new XML::LibXML) parse_string $xml))',
+
+    #------------------------------------------------------------------------------------
+
+    'worker-start/usage' => '(worker-start -title- -name- -id- -exprs- ...) : Clone a worker process to run the given expresions asynchronously.',
+    'worker-start/ismacro' => 1,
+    'worker-start' => sub {
+        my ($o, $args) = @_;
+        my $title = $o->eval(shift @$args, {});
+        my $name  = $o->eval(shift @$args, {});
+        my $id    = $o->eval(shift @$args, {});
+
+        $name = '' unless defined $name;
+        $id   = '' unless defined $id;
+
+        my $pid = fork;
+        if($pid) {  # parent waits for child and returns to caller.
+            waitpid $pid, 0;
+            return;
+        }
+        else {      # child forks and exits immediately.
+            if(fork) { exit 0 }
+        }
+
+        # grandchild runs task; double fork: no zombies lying around.
+        close STDIN;
+        close STDOUT;
+        *STDIN  = new FileHandle("< /dev/null");
+        *STDOUT = new FileHandle("> /dev/null");
+
+
+        # makes us easy to idetify in ps...
+        my $psid = sprintf 'DPL %s-%d', $title, $^T;
+        $psid .= "-$id"   if $id   ne '';
+        $psid .= " $name" if $name ne '';
+
+        $psid .= " (userid $PrimaLisp::DPL_userid)" if defined $PrimaLisp::DPL_userid;
+
+
+        $0 = $psid;
+ 
+        # be nice.
+        setpriority(0, 0, 10);
+
+        # stick around after parents die
+        setpgrp(0,0);
+
+
+        my $dbmName = '%-start-worker-pids';
+        my $key     = "$title/$name/$id";
+
+        _report(['in cloned worker %s now, psid: %s, pid: %d', $key, $psid, $$]);
+
+        my $code_set_pid   = '(atomic ,$_dbmName {} (hash-set   (dbm-open ,$_dbmName {mode rw}) / ,$_key ,$_pid) (dbm-close ,$_dbmName))';
+        my $code_clear_pid = '(atomic ,$_dbmName {} (hash-clear (dbm-open ,$_dbmName {mode rw}) / ,$_key       ) (dbm-close ,$_dbmName))';
+
+
+        $o->{__lock_ok_name__} = $o->{__dbm_ok_name__}  = $dbmName;
+        $o->evalAll($code_set_pid, {_dbmName => $dbmName, _key => $key, _pid => $$});
+        delete $o->{__lock_ok_name__};
+        delete $o->{__dbm_ok_name__};
+
+        $o->evalAll($args, {});
+
+        $o->{__lock_ok_name__} = $o->{__dbm_ok_name__}  = $dbmName;
+        $o->evalAll($code_clear_pid, {_dbmName => $dbmName, _key => $key});
+        delete $o->{__lock_ok_name__};
+        delete $o->{__dbm_ok_name__};
+
+        # no caller to return anything to...
+        CORE::exit 0;
+    },
+
+    'worker-stop/usage' => '(worker-stop -title- -name- -id- [-options-]) : Stop a cloned worker from running.',
+    'worker-stop' => sub {
+        my ($o, $args) = @_;
+        my ($title, $name, $id, $options) = @$args;
+
+        my $dbmName = '%-start-worker-pids';
+        my $key     = "$title/$name/$id";
+
+        my $code_clear_pid = '(atomic ,$_dbmName {} (var-push pid (hash-clear (dbm-open ,$_dbmName {mode rw}) / ,$_key)) (dbm-close ,$_dbmName) (var-pop pid))';
+
+        $o->{__lock_ok_name__} = $o->{__dbm_ok_name__}  = $dbmName;
+        my $pid = $o->evalAll($code_clear_pid, {_dbmName => $dbmName, _key => $key});
+        delete $o->{__lock_ok_name__};
+        delete $o->{__dbm_ok_name__};
+
+        if(!defined $pid) {
+            _report(['No pid for worker %s', $key]);
+        }
+        else {
+            _report(['Killing worker %s now, pid: %d', $key, $pid]);
+            kill('HUP', $pid); 
+        }
+
+        return;
+    },
+
+    'worker-status/usage' => '(worker-status -title- -name- -id- [-options-]) : Show worker status.',
+    'worker-status' => sub {
+        my ($o, $args) = @_;
+
+        return [ split /\n+/, `ps auxwww | grep ' DPL ' | grep -v grep`];
+    },
+
+
+    #------------------------------------------------------------------------------------
+
+    'ngrams/usage' => '(ngrams -text- -max-n- -mode-) : Return a list of n-grams derived from -text-.',
+    'ngrams' => sub {
+        my ($o, $args) = @_;
+        my ($text, $maxN, $mode) = @$args;
+
+        if(!defined $maxN) { $maxN = 4 }
+        if(!defined $mode) { $mode = 'phrase' }
+
+        my $ngrams = [ ];
+        my $terms  = [ split(/\s+/, $text) ];   ## TODO use average char point too ... ##
+        my $nTerms = scalar @$terms;
+
+        for my $n (1 .. $maxN -1) {
+          if($n < $nTerms) {
+            for my $i (0 .. $nTerms-$n-1) {
+              if($mode eq 'phrase')  { unshift @$ngrams, join(' ', map { $terms->[$i+$_] } (0 .. $n)) }
+              elsif($mode eq 'list') { unshift @$ngrams, [ map { $terms->[$i+$_] } (0 .. $n) ]        }
+              else { $o->throw("unknown mode '$mode'") }
+            }
+          }
+        }
+
+
+        return $ngrams;
+    },
+
+    'histogram/usage' => '(histogram -terms- -counts-) : Return a histogram (hash of term counts) for the given terms.',
+    'histogram' => sub {
+        my ($o, $args) = @_;
+        my ($terms, $counts) = @$args;
+
+        if(!defined $counts) { $counts = { } }
+
+        if(ref $terms->[0] eq 'ARRAY') {
+          for my $rec0 (@$terms) {
+            my $rec = [ @$rec0 ];
+
+            my $key = join ' ', @$rec;
+            ++$counts->{$key};
+
+            while(@$rec > 2) {
+                pop @$rec;
+                $key = join ' ', @$rec;
+                --$counts->{$key};
+            }
+          }
+        }
+        else {
+            map { ++$counts->{$_} }
+              grep { defined $_ && $_ ne '' }
+                @$terms;
+        }
+
+        return $counts;
+    },
+
+
+    #------------------------------------------------------------------------------------
+
+    'get-called-fns/usage' => '(get-called-fns -expr-) : Return the names of functions called from the given expression.',
+    'get-called-fns' => sub {
+        my ($o, $args) = @_;
+        my ($expr) = @$args;
+
+
+        my $result;
+
+
+        # my $parsed_expr = eval { $o->eval('(eval "(parse ($_ ))"))', {_ => $expr}) };
+          my $parsed_expr = eval { $o->evalAll('(= e1 $e0)(namespace (time) $[e1] (eval "(parse ($e1 ))"))', {e0 => $expr}) };
+        if($@) {
+            # There might be a bug in exception handling in macro calls that leaves eval mode off that makes the comma needed as a workaround....
+            # my $e = $o->eval(',(desc-to-string $_)', {_ => $@});
+            $result = { exception => $@ };
+        }
+        else {
+            my $names = {};
+            map { PrimaLisp::__recurs_get_first_expr $names, $_ } @$parsed_expr;
+
+            my $names_bi  = [];
+            my $names_def = [];
+            map {
+                my $list = exists $o->{builtinsMap}->{$_}? $names_bi: $names_def;
+                push @$list, $_;
+            } keys %$names;
+
+            $result = { builtins => $names_bi, defined => $names_def };
+        }
+
+        return $result;
+    },
+
+    #------------------------------------------------------------------------------------
+
+    '=?/usage' => '(=? -var- -val-) : Evaluate and assign -val- to -var- only if -var- is undefined.',
+    '=?/ismacro' => 1,
+    '=?' => sub {
+        my ($o, $args) = @_;
+        my ($var, $valDefault) = @$args;
+
+        $var = $o->eval($var, {});
+
+        my $val = $o->{builtinsMap}->{'var-get'}->($o, [ $var ] );
+        return $val if defined $val;
+        
+        $valDefault = $o->eval($valDefault, {});
+        $val =  $o->{builtinsMap}->{'var-set'}->($o, [ $var, $valDefault ] );
+
+        return $val;
+    },
+
+    #------------------------------------------------------------------------------------
+
+    'git/usage' => '(git ...) : Git API.',
+    'git' => sub {
+        my ($o, $args) = @_;
+
+        map { if(/'/)    { $o->throw("Unacceptable git arg '$_'") }} @$args;
+        map { if(/\.\./) { $o->throw("Unacceptable git arg '$_'") }} @$args;
+
+        if(!-f "$o->{descDir}/.gitignore") {
+            my $fh = new FileHandle("> $o->{descDir}/.gitignore.$$");
+            $o->throw("Can't setup git here: $!")
+                unless defined $fh;
+            print $fh ".*\n*,v\n";
+            close $fh;
+            rename "$o->{descDir}/.gitignore.$$", "$o->{descDir}/.gitignore";
+        }
+
+
+        my $targetDir = $o->{descDir};
+
+        my $gitcmd = $args->[0];
+        if($gitcmd eq 'clone') {
+            $targetDir = "$targetDir/.."; 
+        }
+
+        my @cmds = (
+            "cd $targetDir",
+            'git ' . join(' ', map { "'$_'" } @$args),
+        );
+
+        my $cmd = join(' && ', @cmds);
+        _report(['git command: %s', $cmd]);
+
+        return `($cmd) 2>&1`;
+    },
+
+    #------------------------------------------------------------------------------------
+
+    'DPL-login/usage' => '(DPL-login [-workspace-name-]) : .',
+    'DPL-login' => sub {
+        my ($o, $args) = @_;
+        my ($workspaceName) = @$args;
+
+        my @tmp = $o->DPL_login($workspaceName);
+        return \@tmp;
+    },
+
+    'login/usage' => '(login) : Return current userid.',
+    'login/usage' => '(login -token-) : Authenticate using token return from initial authentication.',
+    'login/usage' => '(login -userid- -password-) : Authenticate user credentials, run as defined userid, and return a token to use for future calls.',
+    'login' => sub {
+        my ($o, $args) = @_;
+
+        return $PrimaLisp::DPL_userid if !@$args;
+
+        # TODO login/logout should make direct calls into interpreter, not use overridable eval..
+
+        my $bi   = $o->{builtinsMap};
+
+        my $key = $PrimaLisp::loginKey;
+
+        $key = ["oOGmIlqxkgpm2cnFDWkQOwCHCOTr3dXmzE6N3RYioS/PClAL3RK5HOsTQzCQDc2rb5Ux7dnyOQEi\nsRv3VfziuYiiKGPTV0DN\n",
+                "kNnDEjiH8D1L6aygPkQnWTDjJYLSv+bLqHu8vy5GxRz+OWNp6HCKeo12JQa9PfSaXbgDj+CWFGBB\n03jabMyA2+yaHADqMiL7\n"]
+            unless defined $key;
+
+        my $fDir  = sprintf '%s/.dpl-dbm', $o->{topDescDir};
+        if(! -d $fDir) { mkpath $fDir }
+        chmod 0777, $fDir;
+
+        my $dbmName = '%-login-auth-tokens';
+
+        if(@$args == 2) {
+            my ($userid, $passwd) = @$args;
+
+            $o->throw("Unacceptable userid '$userid'")
+                unless $userid =~ /^[-\w.\@]+$/;
+
+            if(defined $PrimaLisp::DPL_userid) { $bi->{logout}->($o, []) }
+
+            if(!$bi->{'authenticated?'}->($o, [$userid, $passwd])) {
+                _report(["Invalid credentials, userid $userid"]);
+                $o->throw('Invalid credentials...');
+            }
+
+            my $auth = $bi->{'authentication-name'}->($o, []);
+
+            $PrimaLisp::DPL_auth     = $auth;
+            $PrimaLisp::DPL_userid   = $userid;
+            $PrimaLisp::DPL_password = $passwd = $o->maskData($passwd);
+            # mask password before serializing, encrypt string before storing!
+
+            # TODO Need to include a per-auth realm value, use with token as dbm key.
+
+            my $data = { auth => $auth, userid => $userid, password => $passwd, ts => int(time) };
+
+            $data = $o->encryptData($key, $data);
+
+            my $token = $bi->{'rand-guid'}->($o, []);
+            $o->setDBM($dbmName, $token, $data);
+
+            $o->{_login_auth_token_} = $token;
+
+            return $token;
+        }
+
+        elsif(@$args == 1) {
+            my ($token) = @$args;
+
+            my $data = $o->getDBM($dbmName, $token);
+
+            if(!defined $data || $data eq '') {
+                _report(['Invalid credentials....']);
+                $o->throw('Invalid credentials....');
+            }
+
+            $data = $o->decryptData($key, $data);
+
+            if(!defined $data || ref $data ne 'HASH' || !defined $data->{ts} || !defined $data->{userid}) {
+                _report(['Corrupted credentials....']);
+                $o->throw('Corrupted credentials...');
+             }
+
+            my $lifespan = $PrimaLisp::loginCredentialLifespan;
+            $lifespan = 24*3600 unless defined $lifespan;
+
+            if(time - $data->{ts} > $lifespan) {
+                $bi->{logout}->($o, [$token]);
+                _report(['Stale credentials....']);
+                $o->throw('Stale credentials...');
+            }
+
+            $PrimaLisp::DPL_auth     = $data->{auth};
+            $PrimaLisp::DPL_userid   = $data->{userid};
+            $PrimaLisp::DPL_password = $data->{password};
+
+            $o->{_login_auth_token_} = $token;
+
+            return $token;
+        }
+
+        else { $o->throw("Too many arguments!") }
+
+        return;
+    },
+
+    #------------------------------------------------------------------------------------
+
+    'logout/usage' => '(logout) : Revert to anonymous state.',
+    'logout' => sub {
+        my ($o, $args) = @_;
+        my ($token) = @$args;
+
+        $token = $o->{_login_auth_token_} unless defined $token;
+
+        my $dbmName = '%-login-auth-tokens';
+
+        if(defined $token) {
+            $o->clearDBM($dbmName, $token);
+        }
+        
+        undef $PrimaLisp::DPL_auth;
+        undef $PrimaLisp::DPL_userid;
+        undef $PrimaLisp::DPL_password;
+
+        delete $o->{_login_auth_token_};
+
+        return;
+    },
+
+    #------------------------------------------------------------------------------------
+
+    'authenticated?/usage' => '(authenticated? -user-name- -password-) : Returns true for valid credentials, false otherwise.',
+    'authenticated?' => sub {
+        _report([' !! TESTING !!  No authentication is happening here  !! TESTING !!']);
+
+        return 0;
+    },
+
+    #------------------------------------------------------------------------------------
+
+    'authentication-realm/usage' => '(authentication-realm) : Returns auth realm for HTTP Basic Auth.',
+    'authentication-realm' => sub {
+        return 'DPL user authentication';
+    },
+
+    #------------------------------------------------------------------------------------
+
+    'encrypt/usage' => '(encrypt -key- -clear-data- [-options-]) : Return encrypted form of -clear-data-.',
+    'encrypt' => sub {
+        my ($o, $args) = @_;
+        my ($key, $clearData, $option) = @$args;
+
+        my $cbc = new Crypt::CBC(
+            -key    => $o->unmaskData($key),
+            -cipher => 'Crypt::OpenSSL::AES',
+            -padding => 'standard',
+        );
+
+        return $cbc->encrypt($clearData);
+    },
+
+    'decrypt/usage' => '(decrypt -key- -crypt-data- [-options-]) : Return decrypted form of -crypt-data-.',
+    'decrypt' => sub {
+        my ($o, $args) = @_;
+        my ($key, $cryptData, $option) = @$args;
+
+        my $cbc = new Crypt::CBC(
+            -key    => $o->unmaskData($key),
+            -cipher => 'Crypt::OpenSSL::AES',
+            -padding => 'standard',
+        );
+
+        return $cbc->decrypt($cryptData);
+    },
+
+
+    'data-mask/usage' => '(data-mask -data- ...) : Mask the concatenation of args. Returns masked form of input.',
+    'data-mask' => sub {
+        my ($o, $args) = @_;
+        return $o->maskData(join('', @$args));
+    },
+
+    'data-unmask/usage' => '(data-unmask -masked-data-) : Unmask output of (data-mask). Returns original input.',
+    'data-unmask' => sub {
+        my ($o, $args) = @_;
+        return $o->unmaskData($args->[0]);
+    },
+
+    #------------------------------------------------------------------------------------
+
+    # '/usage' => '() : .',
+    # '' => sub {
+    # },
+
+    #------------------------------------------------------------------------------------
+
+    # '/usage' => '() : .',
+    # '' => sub {
+    # },
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

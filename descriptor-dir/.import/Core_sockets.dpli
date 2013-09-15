@@ -1,0 +1,285 @@
+# -*- coding: UTF-8 -*-
+# $Id: Core_sockets.dpli,v 1.7 2013/04/05 21:03:31 rcgood Exp $  #%^)
+#
+# This implements socket related builtin functions.
+# Copyright (C) 2013 Rob Good
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+
+use Socket;
+use Encode;
+use Time::HiRes qw(time);
+
+{
+    'socket-listener/usage' => '(socket-listener -port-) : .',
+    'socket-listener' => sub {
+        my ($o, $args) = @_;
+        my ($port) = @$args;
+
+        my $sock = new FileHandle;
+        socket $sock, PF_INET, SOCK_STREAM, getprotobyname('tcp')
+            or return $o->throw(" !! socket(): $!");
+
+        setsockopt $sock, SOL_SOCKET, SO_REUSEADDR, pack("l", 1)
+            or return $o->throw(" !! setsockopt(): $!");
+
+        bind $sock, sockaddr_in($port, INADDR_ANY)
+            or return  $o->throw(" !! bind(): $!");
+
+        listen $sock, SOMAXCONN
+            or return $o->throw(" !! listen(): $!");
+
+        return {
+            port => $port,
+            sock => $sock,
+        };
+    },
+
+    'socket-close/usage' => '(socket-close -connection-) : .',
+    'socket-close' => sub {
+        my ($o, $args) = @_;
+        my ($connection) = @$args;
+
+        close $connection->{sock}  if defined $connection->{sock};
+
+        delete $connection->{sock};
+
+        return;
+    },
+
+    'socket-close2/usage' => '(socket-close2 -connection-) : .',
+    'socket-close2' => sub {
+        my ($o, $args) = @_;
+        my ($connection) = @$args;
+
+        close $connection->{fhIn}  if defined $connection->{fhIn};
+        close $connection->{fhOut} if defined $connection->{fhOut};
+
+        delete $connection->{fhIn};
+        delete $connection->{fhOut};
+
+        return;
+    },
+
+    'socket-accept/usage' => '(socket-accept -listener-) : .',
+    'socket-accept' => sub {
+        my ($o, $args) = @_;
+        my ($listener) = @$args;
+
+        my $clSock = new FileHandle;
+
+        # Wait for network connection here.
+
+        $listener->{clAddr} = accept $clSock, $listener->{sock};
+        if(!$listener->{clAddr}) {
+            $o->throw("Can't accept() this: $!");
+        }
+
+        # Got a connection, fork a child to handle it, wait for more.
+        $listener->{fhIn}  = $clSock;
+        $listener->{fhOut} = $clSock;
+
+        $clSock->autoflush(1);
+
+        return $listener;
+    },
+
+    'socket-in-line/usage' => '(socket-in-line -connection-) : .',
+    'socket-in-line' => sub {
+        my ($o, $args) = @_;
+        my ($connection) = @$args;
+
+        my $fh  = $connection->{fhIn};
+        my $msg = <$fh>;
+        return unless defined $msg;
+
+        chomp $msg;
+        $msg =~ s/\r$//;
+
+        return $msg;
+    },
+
+    'socket-in-http/usage' => '(socket-in-http -connection-) : .',
+    'socket-in-http' => sub {
+        my ($o, $args) = @_;
+        my ($connection) = @$args;
+
+        my $fh  = $connection->{fhIn};
+
+        # First line
+        my $req_line = <$fh>;
+        return unless defined $req_line;
+
+
+        chomp $req_line; $req_line =~ s/\r$//;
+
+        if($req_line !~ /^(\w+) (\S+) HTTP\/([\d.]+)$/) {
+            $o->throw("Malformed HTTP header: <|$req_line|>");
+        }
+
+        my ($req_method, $req_path, $req_http_vers) = ($1, $2, $3);
+
+        my $req_queryHash = {};
+
+        if($req_path =~ /^([^?]+)\?([^?]+)$/) {
+            my ($path, $qs) = ($1, $2);
+            $req_path = $path;
+            $req_queryString = $qs;
+
+            map {
+                my ($name, $value) = split '=', $_;
+                $req_queryHash->{$name} = _urldecode $value;
+            } split '&', $qs;
+        }
+
+        # TODO get queryHash
+
+
+        # Header lines to blank line
+
+        my $req_headers = {};
+        while(my $line = <$fh>) {
+            chomp $line; $line =~ s/\r$//;
+
+            last if $line eq '';
+
+
+            if($line !~ /^([^:]+): (.*)$/) {
+                $o->throw("Malformed HTTP header: <|$line|>");
+            }
+            my ($hname, $hvalue) = ($1, $2);
+            $hname = join('-', map { ucfirst lc $_ } split('-', $hname));
+            $req_headers->{$hname} = $hvalue;
+        }
+
+
+        my $req_body_len = $headers->{'Content-Length'};
+
+        if(!defined $req_body_len) {
+            if($req_method eq 'GET') { $req_body_len = 0 }
+        }
+
+        my $req_body;
+
+        if(defined $req_body_len) {
+            $req_body_length2 = read $fh, $req_body, $req_body_len;
+        }
+        else {
+            local $/ = undef;
+            $req_body = <$fh>;
+        }
+
+        $o->{_latest_http_request_headers_} = $req_headers;
+
+        return {
+            'request-method'          => $req_method,
+            'path-info'               => $req_path,
+            'query-hash'              => $req_queryHash,
+            'request-content'         => $req_body,
+            'request-content-length'  => $req_body_length,
+
+            'Pname'                   => 'DPL-HTTP-Server',
+            'user-agent'              => $ENV{HTTP_USER_AGENT},
+            'script-name'             => undef,
+
+            'remote-addr'             => $conn->{clAddr},
+            'remote-port'             => undef,
+
+            'time'                    => time,
+            'pid'                     => $$,
+
+            'http-vers'              => $req_http_vers,
+            'headers'                => $req_headers,
+        };
+    },
+
+    'socket-in/usage' => '(socket-in -connection- -length-) : .',
+    'socket-in' => sub {
+        my ($o, $args) = @_;
+        my ($connection, $length) = @$args;
+
+        my $fh  = $connection->{fhIn};
+        my $data;
+
+        if(defined $length) {
+            $data = read $fh, $data, $length;
+        }
+        else {
+            local $/ = undef;
+            $data = <$fh>;
+        }
+
+        return $data;
+    },
+
+    'socket-out/usage' => '(socket-out -connection- -data- ...) : .',
+    'socket-out' => sub {
+        my ($o, $args) = @_;
+        my $connection = shift @$args;
+
+        my $fh = $connection->{fhOut};
+
+        print $fh @$args;
+
+        return;
+    },
+
+    'socket-eof?/usage' => '(socket-eof? -connection- -data-) : .',
+    'socket-eof?' => sub {
+        my ($o, $args) = @_;
+        my $connection = shift @$args;
+
+        my $fh = $connection->{fhOut};
+
+        return eof $fh;
+    },
+
+    # '/usage' => '() : .',
+    # '' => sub {
+    # },
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

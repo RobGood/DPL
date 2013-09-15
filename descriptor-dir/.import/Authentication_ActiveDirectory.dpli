@@ -1,0 +1,52 @@
+# ©2010 Primal Inc., all rights reserved. www.primal.com
+# $Id: Authentication_ActiveDirectory.dpli,v 1.9 2013/03/27 05:28:14 rcgood Exp $  #%^)
+
+use Authen::Simple::ActiveDirectory;
+
+{
+  package _logr;
+
+  sub mesg  {
+	my ($tag, $msg) = @_;
+	PrimaLisp::_report([' %s %s', $tag, $msg]);
+  }
+
+  sub debug { mesg('--', $_[1]) }
+  sub info  { mesg('==', $_[1]) }
+  sub error { mesg('!!', $_[1]) }
+  sub warn  { mesg('~~', $_[1]) }
+
+  sub new {
+	my ($o, $pl) = @_;
+    $o = bless { }, $o;
+    $o->{pl} = $pl;
+    $o
+  }
+}
+
+{
+    'authenticated?/usage' => '(authenticated? -user-name- -password-) : Returns true for valid credentials, false otherwise.',
+	'authenticated?' => sub {
+		my ($o, $a) = @_;
+		my ($username, $password) = @$a;
+
+		my $ad = new Authen::Simple::ActiveDirectory(
+			host      => $PrimaLisp::Authentication_ActiveDirectory::host,
+			principal => $PrimaLisp::Authentication_ActiveDirectory::principal,
+            log       => new _logr($o),
+		);
+    
+		return $ad->authenticate($username, $password);
+	},
+
+    'authentication-realm/usage' => '(authentication-realm) : Returns auth realm for Active Directory Auth.',
+    'authentication-realm' => sub {
+        return $PrimaLisp::Authentication_ActiveDirectory::realm;
+    },
+    
+    'authentication-name/usage' => '(authentication-name) : Returns auth name for Active Directory Auth.',
+    'authentication-name' => sub {
+        return $PrimaLisp::Authentication_ActiveDirectory::name;
+    },
+    
+}

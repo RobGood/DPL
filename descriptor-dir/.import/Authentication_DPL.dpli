@@ -1,0 +1,251 @@
+# ©2013 Primal Inc., all rights reserved. www.primal.com
+# $Id: Authentication_DPL.dpli,v 1.9 2013/03/27 05:28:02 rcgood Exp $  #%^)
+
+my $duidbmName = '.dpl-user-info';
+
+{
+  package PrimaLisp;
+
+
+  $PrimaLisp::dui_key = $PrimaLisp::Authentication_DPL::dui_key;
+
+  #-------------------------------------------------
+  sub
+  getUserData {
+    my ($o, $dbm, $userid) = @_;
+
+    my $data = $dbm->{$userid};
+
+    return $o->decryptData($PrimaLisp::dui_key, $data)
+        if defined $data;
+  }
+
+  
+  sub
+  setUserData {
+    my ($o, $dbm, $userid, $data) = @_;
+    
+    $data = $o->encryptData($PrimaLisp::dui_key, $data);
+
+    $dbm->{$userid} = $data;
+
+    return $data;
+  }
+  
+  sub
+  clearUserData { 
+    my ($o, $dbm, $userid) = @_;
+    
+    my $data = $dbm->{$userid};
+
+    delete $dbm->{$userid};
+
+    if(defined $data) {
+        $data = $o->decryptData($PrimaLisp::dui_key, $data);
+    }   
+    
+    return $data;
+  } 
+
+  #-------------------------------------------------
+
+  sub
+  callerAccessCheck {
+    my ($o, $dbm, $allowIfNotOver) = @_;
+
+    # If there are no users or an info file, then allow all.
+    # This is so we can add the first user.
+    return unless defined $dbm;
+    return unless scalar keys %$dbm;
+
+    $o->throw("Caller must be authenticated to make this call.")
+        unless defined $PrimaLisp::DPL_userid;
+
+
+    my $callerData = $o->getUserData($dbm, $PrimaLisp::DPL_userid);
+
+    my $bi = $o->{builtinsMap};
+    # _report([' caller: %s, caller data: %s', $PrimaLisp::DPL_userid, $bi->{'desc-to-string'}->($o, [$callerData])]);
+
+    my $authLevel = $callerData->{authLevel};
+    $o->throw("authLevel should be defined here")
+        unless defined $authLevel;
+
+    $o->throw("Caller $PrimaLisp::DPL_userid is unauthorized to make this call. $authLevel < $allowIfNotOver ")
+        unless $authLevel < $allowIfNotOver;
+
+    return $authLevel;
+  }
+
+
+}
+
+
+#-------------------------------------------------
+    
+
+{
+    'authenticated?/usage' => '(authenticated? -user-id- -password-) : Returns true for valid credentials, false otherwise.',
+	'authenticated?' => sub {
+		my ($o, $args) = @_;
+		my ($userid, $password) = @$args;
+
+        my $dbm = $o->openTopDBM($duidbmName, 0444);
+
+        my $data = $o->getUserData($dbm, $userid);
+
+        $o->closeDBM($dbm);
+
+        return 1 if
+            defined $data &&
+            ref $data eq 'HASH' &&
+            $userid   eq $data->{userid} &&
+            $password eq $o->unmaskData($data->{password});
+
+		return 0;
+	},
+
+    'authentication-realm/usage' => '(authentication-realm) : Returns auth realm for DPL Users.',
+    'authentication-realm' => sub {
+        return $PrimaLisp::Authentication_DPL::realm;
+    },
+
+    'authentication-name/usage' => '(authentication-name) : Returns auth name for DPL Users.',
+    'authentication-name' => sub {
+        return $PrimaLisp::Authentication_DPL::name;
+    },
+
+
+    #--------------------
+
+    'user-signup/usage' => '(user-signup -user-id- -password-1- -password-2-) : Self serve account creation.',
+    'user-signup' => sub {
+		my ($o, $args) = @_;
+        my ($userid, $password1, $password2) = @$args;
+
+        # Send a message to the signup woker.
+        # signup worker must be started by a user with authLevel able to call (user-add).
+
+        # response message indicates: success, failed: password mismatch, failed: userid exists.
+
+        return;
+    },
+
+    'user-password-change/usage' => '(user-password-change -user-id- -password-1- -password-2- -new-password-) : Self serve password change.',
+    'user-password-change' => sub {
+		my ($o, $args) = @_;
+        my ($userid, $password1, $password2, $newPassword) = @$args;
+
+        return;
+    },
+
+    'user-add/usage' => '(user-add -user-id- -password- -data-) : Add a new user to the DPL userids.',
+    'user-add' => sub {
+		my ($o, $args) = @_;
+        my ($userid, $password1, $password2, $data) = @$args;
+
+        my $dbm = $o->openTopDBM($duidbmName, 0666);
+        my $callerAuthLevel = $o->callerAccessCheck($dbm, 100);
+
+        if($password1 ne $password2) {
+            return { msg => 'Password mismatch. Nothing happens.' };
+        }
+
+        my $password = $o->maskData($password1);
+        undef $password1;
+        undef $password2;
+
+
+        # $callerAuthLevel is undefined only when there is no user info file.
+        # This means the first userid created is mostly omnipotent.
+        my $authLevel = $data->{authLevel};;
+        delete $data->{authLevel};
+
+        if(!defined $authLevel) {
+            if(defined $callerAuthLevel) { $authLevel = 10 * $callerAuthLevel + ($callerAuthLevel? 0: 1) }
+            else                         { $authLevel = 0 }
+        }
+
+        my $data0 = $o->getUserData($dbm, $userid);
+        if(defined $data0 && $data0 ne '') {
+            $o->throw("User $userid already exists '$data0'.");
+        }
+
+        $o->setUserData($dbm, $userid, {
+            userid    => $userid,
+            password  => $password,
+            authLevel => 0+$authLevel,
+            data      => $data
+        });
+
+        $o->closeDBM($dbm);
+
+        return;
+    },
+
+    'user-delete/usage' => '(user-delete -user-id-) : Remove a user from the DPL userids.',
+    'user-delete' => sub {
+		my ($o, $args) = @_;
+        my ($userid) = @$args;
+
+        my $dbm  = $o->openTopDBM($duidbmName, 0666);
+        my $callerAuthLevel = $o->callerAccessCheck($dbm, 100);
+
+        my $data = $o->clearUserData($dbm, $userid);
+        # TODO maybe use some data to say goodbye?
+
+        $o->closeDBM($dbm);
+
+        return $data;
+    },
+
+    'user-update/usage' => '(user-update -user-id- -data-) : Update a user\'s properties in the DPL userids.',
+    'user-update' => sub {
+		my ($o, $args) = @_;
+        my ($userid, $dataNew) = @$args;
+
+        my $dbm  = $o->openTopDBM($duidbmName, 0666);
+        my $callerAuthLevel = $o->callerAccessCheck($dbm, 100);
+
+        my $data = $o->getUserData($dbm, $userid);
+
+        map { $data->{data}->{$_} = $dataNew->{$_} } keys %$dataNew;
+
+        $o->setUserData($dbm, $userid, $data);
+        $o->closeDBM($dbm);
+
+        return;
+    },
+
+    'user-list/usage' => '(user-list) : List users in the DPL userids.',
+    'user-list' => sub {
+		my ($o, $args) = @_;
+        my ($userid) = @$args;
+
+        my $dbm = $o->openTopDBM($duidbmName, 0444);
+        my $callerAuthLevel = $o->callerAccessCheck($dbm, 1000);
+
+        return [ ] unless defined $dbm;
+
+
+        my $out;
+
+        if(!defined $userid) {
+            $out = [ keys %$dbm ];
+        }
+        else {
+            my $userData = $o->getUserData($dbm, $userid);
+
+            if($callerAuthLevel <= $userData->{authLevel} || $PrimaLisp::DPL_userid eq $userData->{userid}) {
+                $out = $userData;   
+            } 
+        }
+        
+        $o->throw("Permission denied.")
+            unless defined $out;
+
+        $o->closeDBM($dbm);
+
+        return $out;
+    },
+}
