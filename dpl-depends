@@ -1,5 +1,5 @@
-#!/usr/bin/perl -w
-# $Id: dpl-depends,v 1.22 2013/04/16 02:06:01 rcgood Exp $  #%^)
+#!/usr/bin/perl -W
+# $Id: dpl-depends,v 1.2 2013/09/17 04:03:07 rcgood Exp $  #%^)
 #
 # This utility checks for known dependencies
 # and reports what, if anything, should be installed.
@@ -44,14 +44,20 @@ IPC::SysV
 IPC::Semaphore
 Crypt::CBC
 Crypt::OpenSSL::AES
-
 ));
+
+## Manual steps!
+##  apt-get install libssl-dev
+##  apt-get install libreadline6-dev
+##  cpan Term::ReadLine::Gnu
+## Manual steps!
 
 my @reqPkgs_Full = (qw(
-XML::LibXML::XPathContext
-XML::LibXML
-HTTP::Server::Simple::CGI
 ));
+
+# XML::LibXML::XPathContext
+# XML::LibXML
+# HTTP::Server::Simple::CGI
 
 # Still need to check for the presence of these commands:
 my @reqCmds = (qw(
