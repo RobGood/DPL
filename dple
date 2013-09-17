@@ -2,7 +2,7 @@
 # -*- coding: UTF-8 -*-
 # $Id: dple,v 1.147 2013/04/15 13:44:22 rcgood Exp $  #%^)
 #
-# This is the original descriptor (JSON object) editor.
+# This is the original descriptor DPL (JSON object) editor.
 # Copyright (C) 2010-2013 Rob Good
 #
 # This program is free software; you can redistribute it and/or modify
@@ -272,10 +272,9 @@ DoACLChecks {
 
 
 
-    if(!defined $workspaceName) { errExit "Workspace name should be define dby now..." }
+    if(!defined $workspaceName) { errExit "Workspace name should be defined by now..." }
 
     return if defined $DPL_userid;
-
 
     # print STDERR " -- $Pname: Using anonymous access rules here...\n";
     $code = '((fn (acl) (if (defined? $acl) ($acl check))) (catch (new-inst dpl-access $req-info)))';
@@ -289,6 +288,7 @@ DoACLChecks {
 
           'Pname'                => $Pname,
           'user-agent'           => $ENV{HTTP_USER_AGENT},
+          'http-host'            => $ENV{HTTP_HOST},
           'script-name'          => $ENV{SCRIPT_NAME},
 
           'remote-addr'          => $remote_addr,
@@ -296,6 +296,8 @@ DoACLChecks {
       }};
 
     eval { $pl->evalAll($code, $env) };
+
+    $DPL_userid = '';
 
     return unless $@;
 
@@ -781,7 +783,7 @@ my $altNavFormHTML = '';
 
 sub
 ListAllDescriptors {
-    if(!defined $workspaceName) { errExit "Workspace name should be define dby now..." }
+    if(!defined $workspaceName) { errExit "Workspace name should be defined by now..." }
 
     #----------------------------------------------
     if(1) {

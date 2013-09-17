@@ -1440,7 +1440,7 @@ DPL_login {
     $workspaceName = $wkPath;
 
     if($workspaceName =~ s/^\///) {
-        $o->throw("Assertions fail... prefix: '$prefix'") unless $prefix eq '~';
+        $o->throw("Assumptions fail... prefix: '$prefix'") unless $prefix eq '~';
         $prefix = "$prefix/";
     }
 
