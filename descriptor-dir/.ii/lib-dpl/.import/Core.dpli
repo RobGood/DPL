@@ -4077,7 +4077,7 @@ FINI
             $desc = $o->{outerInterp}->eval('(desc-read _ $name)', {name => $descName});
         }
         else {
-            $desc = { _isNew => 1 };
+            $desc = undef;
         }
 
         unless($options->{'no-cache'}) {
@@ -4085,7 +4085,7 @@ FINI
             $o->{descCache}->{$o->{namespace}}->{$descName}->{mtime} = $mtime if defined $mtime;
         }
 
-        unless($options->{'no-on-load'} ) {
+        unless(!defined $desc || $options->{'no-on-load'} ) {
             my $code = <<FINI;
             (var-push self \$_desc) (var-push self/name \$_name) (var-push on-load)
             (if (def-hash-fn \$self / on-load) (on-load))

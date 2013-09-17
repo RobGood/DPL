@@ -477,7 +477,10 @@ EditOneDescriptor {
 #----------------------------
 if($XX_use_interpreter_for_read) {
     $info = $pl->eval('(desc-read _ $name)', {name => $descName});
-    if(exists $info->{_isNew}) {
+    if(!defined $info) {
+        $isNew = 1;
+    }
+    elsif(exists $info->{_isNew}) {
         delete $info->{_isNew};
         $isNew = 1;
     }

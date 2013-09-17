@@ -281,6 +281,7 @@ my $env = {
 
         'Pname'                => $Pname, 
         'user-agent'           => $ENV{HTTP_USER_AGENT},
+        'http-host'            => $ENV{HTTP_HOST},
         'script-name'          => $ENV{SCRIPT_NAME},
 
         'remote-addr'          => $ENV{REMOTE_ADDR},
