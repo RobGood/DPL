@@ -406,10 +406,13 @@ EditOneDescriptor {
     # errExit if $@;
 
 
-    $desc_rcsId = $descIdx->{'Desc-rcs-id'};
-    if (ref $desc_rcsId eq 'ARRAY') {
-        $desc_rcsId->[1] =~ s/\//-/g;
-        $desc_rcsId = sprintf 'v%s %sT%sZ', @$desc_rcsId;
+    $desc_rcsId = '';
+    if(exists $descIdx->{'Desc-rcs-id'}) {
+        $desc_rcsId = $descIdx->{'Desc-rcs-id'};
+        if (ref $desc_rcsId eq 'ARRAY') {
+            $desc_rcsId->[1] =~ s/\//-/g;
+            $desc_rcsId = sprintf 'v%s %sT%sZ', @$desc_rcsId;
+        }
     }
 
 

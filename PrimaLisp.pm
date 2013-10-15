@@ -1288,7 +1288,7 @@ FINI
         my $e = $@;
         if($e) {
 			# _report("2. val: $val");
-            _throw("$e\n$val");
+            $o->throw("$e\n$val");
         }
 
         return $str;
@@ -1306,7 +1306,7 @@ FINI
         my $e = $@;
         if($e) {
             # _report "Exception in (desc-from-string): JSON: $e\n$args->[0]";
-            _throw($e);
+            $o->throw($e);
         }
 
         return unless defined $desc;
@@ -1314,15 +1314,15 @@ FINI
         sub _postdeserialize {
             my ($o, $val) = @_;
             if(ref $val eq '') {
-                unless(defined $val) { _throw("undefined value here from '$o->{_json_}'") }
+                unless(defined $val) { $o->throw("undefined value here from '$o->{_json_}'") }
 
                 if($val =~ /^\(sym-from-string '.*'\)$/) {
                     $_[1] = $o->eval($val, { });
                 }
             }
-			elsif($val eq 'true' ) { $_[1] = 1 }
-			elsif($val eq 'false') { $_[1] = 0 }
-			elsif($val eq 'null' ) { $_[1] = undef }
+			elsif($val eq 'true' ) { $_[1] = JSON::true }
+			elsif($val eq 'false') { $_[1] = JSON::false }
+			elsif($val eq 'null' ) { $_[1] = JSON::null }
             elsif(ref $val eq 'ARRAY' ) { map { defined $_         && $o->_postdeserialize($_)         } @$val      }
             elsif(ref $val eq 'HASH'  ) { map { defined $val->{$_} && $o->_postdeserialize($val->{$_}) } keys %$val }
 
@@ -1732,24 +1732,30 @@ referToLookup {
 sub
 getFullPathFromPath {
 	my ($o, $path) = @_;
-	# print STDERR " >> $Pname: getFullPathFromPath($path)\n";
+	# print STDERR " >> : getFullPathFromPath($path)\n";
 
    
     # Look in current descriptor dir
     my $fullPath = "$o->{descDir}/$path";
+	# print STDERR " -- : test fullPath: $fullPath\n";
 
     my @s = stat $fullPath;
     if(@s) { return $fullPath }
 
     
     # Look in current inner descriptor dir
-    my @fullPathList = glob "$o->{descDir}/.ii/lib-*/$path";
+    my @fullPathList = (glob("$o->{descDir}/$path"), glob("$o->{descDir}/.ii/lib-*/$path"));
+	# printf STDERR " -- : fullPathList: %s\n", join(', ', @fullPathList);
     if(@fullPathList) {
-        $fullPath = shift @fullPathList;
-        if(@fullPathList) { _report(['Leaving some paths behind: %s', join(':', @fullPathList)]) }
+        while(@fullPathList) {
+            $fullPath = shift @fullPathList;
 
-        @s = stat $fullPath;
-        if(@s) { return $fullPath }
+            @s = stat $fullPath;
+            if(@s) {
+                if(@fullPathList) { _report(['Leaving some paths behind: %s', join(':', @fullPathList)]) }
+                return $fullPath;
+               }
+        }
     }
 
     # Look in outer interpter...
@@ -2312,7 +2318,7 @@ else {
                 $value = eval { $o->evalAll($code, $env) };
                 # _report(" == value: $value");
                 if($@) {
-                    # _throw(sprintf("Exception(%s): %s", $@->{exception}, __LINE__));
+                    # $o->throw(sprintf("Exception(%s): %s", $@->{exception}, __LINE__));
                     $o->throw($@->{exception});
                 }
                 return wantarray? ($value, $after): $value;

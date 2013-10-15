@@ -87,7 +87,7 @@ my $notifier_tid;
   _assertIsValidTypeName {
     my ($o, $type, $name) = @_;
     $o->throw("Invalid $type '$name'.")
-        unless defined $name && $name =~ /^[-.:\w]+$/;
+        unless defined $name && $name =~ /^[-.:%\w]+$/;
 
     return;
   } 
@@ -4989,7 +4989,7 @@ FINI
         my ($name, $options) = @$args;
 
         if(!exists $o->{__dbm_ok_name__} || $name ne $o->{__dbm_ok_name__}) {
-            $o->throw("Invalid dbm-open name '$name'")  unless $name =~ /^[\w.-]+$/;
+            $o->throw("Invalid dbm-open name '$name'")  unless $name =~ /^[-.:%\w]+$/;
         }
 
         my $fDir  = sprintf '%s/.dpl-dbm', $o->{descDir};
@@ -5041,7 +5041,7 @@ FINI
         my ($name, $options) = @$args;
 
         if(!exists $o->{__dbm_ok_name__} || $name ne $o->{__dbm_ok_name__}) {
-            $o->throw("Invalid dbm-close name '$name'")  unless $name =~ /^[\w.-]+$/;
+            $o->throw("Invalid dbm-close name '$name'")  unless $name =~ /^[-.:%\w]+$/;
         }
 
         my $dbm = $dbmMap{$name};
