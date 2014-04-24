@@ -820,14 +820,15 @@ cnvt_date_to_time {
 
 
     ### Try dealing with AM/PM indicator.
-    #                     1        2      3         4
-    if($timeStr =~ /(\d{1,2})(:\d{2}(:\d{2})?)(am|pm)/i) {
+    #               1        2      3           4
+    if($timeStr =~ /(\d{1,2})(:\d{2}(:\d{2})?) *(am|pm)/i) {
         my ($hour, $mid, $ampm) = ($1, $2, $4);
 
+        if($hour == 12) { $hour = 0 }
         if($ampm =~ /pm/i) { $hour += 12 }
 
         my $str = sprintf "%d%s", $hour, $mid;
-        $timeStr =~ s/(\d{1,2})(:\d{2}(:\d{2})?)(am|pm)/$str/i;
+        $timeStr =~ s/(\d{1,2})(:\d{2}(:\d{2})?) *(am|pm)/$str/i;
     }
 
 
@@ -3559,6 +3560,19 @@ FINI
         my ($o, $args) = @_;
         # print STDERR " >> hash-set($o, $args)\n";
         return $o->hashLookup($args->[0], $args->[1], $args->[2], $args->[3]);
+    },
+
+    'hash-merge/usage' => "(hash-merge -desc-dst- -desc-src-) : Merge values from -desc-src- into -desc-dst-.",
+    'hash-merge' => sub {
+        my ($o, $args) = @_;
+        # print STDERR " >> hash-merge($o, $args)\n";
+        return unless defined $args->[0] && defined $args->[1];
+
+        for my $k (keys %{$args->[1]}) {
+            $args->[0]->{$k} = $args->[1]->{$k};
+        }
+
+        return $args->[0];
     },
 
     'hash-set-init/usage' => "(hash-set-init -desc- -path- -name- -value-) : Store value -value- in -name- at -path- in -desc-.",
