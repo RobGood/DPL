@@ -1052,11 +1052,13 @@ my $Default_builtinsMap = {
         if(!defined $fh) {
             # look in inner lib* desc dirs.
             my @hits = glob sprintf('%s/.ii/lib[-.]*/.import/%s.dpli', $o->{descDir}, $importName);
-            $loadFile = shift @hits;
             if(@hits) {
-                _report(['Extra found names being ignored: %s', join(',', @hits)]);
+                $loadFile = shift @hits;
+                if(@hits) {
+                    _report(['Extra found names being ignored: %s', join(',', @hits)]);
+                }
+                $fh = new FileHandle("< $loadFile");
             }
-            $fh = new FileHandle("< $loadFile");
         }
 
         my $pl = $o;
@@ -1068,11 +1070,13 @@ my $Default_builtinsMap = {
             if(!defined $fh) {
                 # look in outer's inner lib* desc dirs.
                 my @hits = glob sprintf('%s/.ii/lib[-.]*/.import/%s.dpli', $pl->{outerInterp}->{descDir}, $importName);
-                $loadFile = shift @hits;
                 if(@hits) {
-                    _report(['Extra found names being ignored: %s', join(',', @hits)]);
+                    $loadFile = shift @hits;
+                    if(@hits) {
+                        _report(['Extra found names being ignored: %s', join(',', @hits)]);
+                    }
+                    $fh = new FileHandle("< $loadFile");
                 }
-                $fh = new FileHandle("< $loadFile");
             }
             $pl = $pl->{outerInterp};
         }
