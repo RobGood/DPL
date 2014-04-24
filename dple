@@ -993,14 +993,15 @@ FINI
         $mFrag   =   "$mapName/$mFrag"    if defined $mapName   && $mapName   ne '';
         $mFragUE = "$mapNameUE/$mFragUE"  if defined $mapNameUE && $mapNameUE ne '';
 
+        my $mFrag2 = '';
+        $mFrag2 = "/$mapName"  if defined $mapName && $mapName ne '';
+
         my $mFrag2UE = '';
         $mFrag2UE = "/$mapNameUE"  if defined $mapNameUE && $mapNameUE ne '';
 
         my $deleteControlFrag = !defined $DPL_userid? '&nbsp;' : 
           " delete <a title='permanently delete &apos;$mFrag&apos; map' href='/api/$Pname/$descNameUE$mFrag2?_delete=$nameUE'><b>.</b></a>";
 
-        my $mFrag2 = '';
-        $mFrag2 = "/$mapName"  if defined $mapName && $mapName ne '';
 <<FINI;
 <tr>
 <td colspan='1' width='25%' align='left'>
@@ -1038,14 +1039,14 @@ FINI
         $mFrag   =   "$mapName/$mFrag"    if defined $mapName   && $mapName   ne '';
         $mFragUE = "$mapNameUE/$mFragUE"  if defined $mapNameUE && $mapNameUE ne '';
 
+        my $mFrag2 = '';
+        $mFrag2 = "/$mapName"  if defined $mapName && $mapName ne '';
+
         my $mFrag2UE = '';
         $mFrag2UE = "/$mapNameUE"  if defined $mapNameUE && $mapNameUE ne '';
 
         my $deleteControlFrag = !defined $DPL_userid? '&nbsp;' : 
 " delete <a title='permanently delete &apos;$mFrag&apos; map' href='/api/$Pname/$descNameUE$mFrag2?_delete=$nameUE'><b>.</b></a>";
-
-        my $mFrag2 = '';
-        $mFrag2 = "/$mapName"  if defined $mapName && $mapName ne '';
 
 <<FINI;
 <tr>
