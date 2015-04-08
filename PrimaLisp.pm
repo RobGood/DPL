@@ -33,8 +33,8 @@ BEGIN {
 
 #X# doc_PerlPackage(<|
 package PrimaLisp;
-$Version = '0.8.48';
-$VDate   = '2014-09-17';
+$Version = '0.8.49';
+$VDate   = '2015-04-08';
 #X# |>)
 
 # $Version = sprintf '%s.%s', $Version, (split /\./, (split /\s+/, '$Revision: 1.463 $')[1])[1];
