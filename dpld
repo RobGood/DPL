@@ -345,7 +345,7 @@ handle_request {
 
 	while(@p) {
 		$cmd = join '/', @p;
-		# dplLog "cmd?: $cmd";
+		  dplLog "cmd?: $cmd";
 		if(exists $dispatch->{$cmd}) { last }
 		unshift @q, pop @p;
 	}
@@ -466,7 +466,7 @@ FINI
     (report "$Pname: Calling (main) in Descriptor %s" $tDesc)
 
     (desc-read self $tDesc {reload 1})
-    (main)
+    (main \$req-info)
 
     (report "$Pname: Back from (main) in Descriptor %s" $tDesc)
 

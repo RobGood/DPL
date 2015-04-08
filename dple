@@ -1,6 +1,6 @@
 #!/usr/bin/perl -w
 # -*- coding: UTF-8 -*-
-# $Id: dple,v 1.147 2013/04/15 13:44:22 rcgood Exp $  #%^)
+# $Id: dple,v 1.1 2014/05/03 00:23:05 rcgood Exp rcgood $  #%^)
 #
 # This is the original descriptor DPL (JSON object) editor.
 # Copyright (C) 2010-2013 Rob Good

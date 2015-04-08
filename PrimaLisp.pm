@@ -33,11 +33,11 @@ BEGIN {
 
 #X# doc_PerlPackage(<|
 package PrimaLisp;
-$Version = '0.8.46';
-$VDate   = '2013-04-18';
+$Version = '0.8.48';
+$VDate   = '2014-09-17';
 #X# |>)
 
-$Version = sprintf '%s.%s', $Version, (split /\./, (split /\s+/, '$Revision: 1.463 $')[1])[1];
+# $Version = sprintf '%s.%s', $Version, (split /\./, (split /\s+/, '$Revision: 1.463 $')[1])[1];
 
 
 #X# doc_PerlUses(0,
@@ -50,6 +50,7 @@ use Digest::MD5;
 use IPC::SysV qw(ftok IPC_PRIVATE S_IRWXU IPC_CREAT);
 use IPC::Semaphore;
 use HTML::Entities;
+use Scalar::Util qw(blessed);
 
 no warnings 'recursion';
 #X# )
@@ -197,7 +198,7 @@ _sig {
     $_sig_o->throw($msg) if defined $msg && $msg;
 }
 
-$SIG{INT} = \&_sig;
+# $SIG{INT} = \&_sig;
 # $SIG{HUP} = \&_sig;
 $SIG{ALRM} = \&_sig;
 
@@ -1549,7 +1550,7 @@ hashLookup {
     while(@$path && $desc) {
         my $name = shift @$path;
         if(!exists $desc->{$name}) {
-            return unless defined $value;
+            return unless defined $value || defined $incr;
 
             $desc->{$name} = { };
         }
@@ -1858,7 +1859,7 @@ eval {
 
     $pf->click(__LINE__) if defined $pf;
 
-	if(length($expr) > 25400) {
+	if(length($expr) > 125400) {
 		_report([' !! Warning: Long expresssion (len %d, <|%s|>) might break eval here!', length($expr), substr($expr, 0, 100)]);
 	}
 
@@ -2232,7 +2233,7 @@ else {
                 # $fn is a lambda expression.
                 $fnRef = $fn;
             }
-            elsif(ref $fn && scalar($fn) =~ /=/) {
+            elsif(ref $fn && (blessed($fn) || scalar($fn) =~ /=/)) {
                 # $fn is a interpreter builtin lanugage object method call.
                 my $method = shift @$args;
                 $o->throw("Invalid method name '$method'")
@@ -2336,6 +2337,11 @@ else {
                 $fnRef = $builtinsMap->{$fn} if ! defined $fnRef; # overridable
                 $fnRef = $builtinsMap->{encode_utf8 $fn} if ! defined $fnRef; # overridable
 
+                if(!defined $fnRef && $fn =~ /^([^@]*)\@([^@]*)$/) {  # Reference to other namespace.
+                    my ($fn, $ns) = ($1, $2);
+                    $fnRef = $o->{varMap}->{$ns}->{$fn}->[0];
+                }
+
                 $fnRef = $o->referToLookup($fn, $fnRef) if !defined $fnRef;
                 #   print STDERR " -- fn: $fn, fnRef: '$fnRef'\n";
                 # _report([" fn: %s, fnRef: '%s'", $fn, $fnRef]);;
@@ -2389,6 +2395,11 @@ else {
                     $fnRef = $varMap->{$fn}->[0] if ! defined $fnRef; # default
                     $fnRef = $builtinsMap->{$fn} if ! defined $fnRef; # overridable
                     $fnRef = $builtinsMap->{encode_utf8 $fn} if ! defined $fnRef; # overridable
+
+                    if(!defined $fnRef && $fn =~ /^([^@]*)\@([^@]*)$/) {  # Reference to other namespace.
+                        my ($fn, $ns) = ($1, $2);
+                        $fnRef = $o->{varMap}->{$ns}->{$fn}->[0];
+                    }
 
                     $fnRef = $o->referToLookup($fn, $fnRef) if !defined $fnRef;
                     #   print STDERR " -- fn: $fn, fnRef: '$fnRef'\n";
@@ -3340,4 +3351,15 @@ __DATA__
   $idx
 )
 
-849931f043111b430106404f7d93631a
+/*
+(def-fn mixin (class vars -- ns)
+  (= ns (namespace))
+  (namespace ,$class ,$[vars ns]
+    (report-vars vars ns)
+    (foreach v $vars
+      (report-vars v)
+      (= $v "${v}@${ns}")))
+  ())
+*/
+
+f0bb749aeb330d23cb9623f0ab1edb5d

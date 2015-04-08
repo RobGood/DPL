@@ -144,7 +144,7 @@ if(defined $reqContentLength) {
 
 # Make it so.
 if(defined $query_string) {
-	map { my ($n, $v) = split '=', $_; $queryHash->{$n} = decode_utf8 urldecode($v) } split '&', $query_string;
+	map { my ($n, $v) = split '=', $_; $queryHash->{decode_utf8 urldecode($n)} = decode_utf8 urldecode($v) } split '&', $query_string;
 }
 
 
@@ -158,16 +158,23 @@ $pl->setDescDir($descDir);
 
 if(! -t) {
 	my $logFile =             "$descDir/.$Pname.log";
+
 	if(-s $logFile > 100e6) {
+        my $fh = new FileHandle(">> $logFile");
+        die " !! $Pname: Can't append to log file '$logFile': $!\n"
+            unless defined $fh;
+
 		my $newName = sprintf "$descDir/.$Pname-%010d.log", time;
-		print STDERR " ** $Pname: Rolling log file '$logFile' to '$newName'...\n";
+		print $fh " ** $Pname: Rolling log file '$logFile' to '$newName'...\n";
 
 		if(rename($logFile, $newName)) {
-			system "renice +18 \$\$ ; gzip $newName &";
+			system "renice +18 \$\$ >/dev/null ; gzip $newName &";
 		}
 		else {
-			print STDERR " !! $Pname: Can't rename log file '$logFile': $!\n";
+			print $fh " !! $Pname: Can't rename log file '$logFile': $!\n";
 		}
+
+        close $fh;
 	}
 
     my $fh = new FileHandle(">> $logFile");

@@ -1358,16 +1358,21 @@ sub _assertIsValidTypeName { PrimaLisp::_assertIsValidTypeName @_ }
         $o->throw(" ##  $PrimaLisp::NoThreadsConfigMesg ## ")
           unless $PrimaLisp::GetThreadIdFn;
 
+        my $tid;
+
         my $code = <<FINI; 
           use threads;
           threads->new(sub {
             my (\$o, \$args) = \@_;
             # _report("thread starting...\\n");
             my \$value;
+            my \$tid = threads->self()->tid();
+            \$o->{builtinsMap}->{'var-set'}->(\$o, [ 'tid' , \$tid ] );
+
             # _report("thread evaling...\\n");
             map {
                 # _report([ 'expr: %s', \$_ ]);
-                eval { \$value = \$o->eval(\$_, { _ => \$_ }) };
+                eval { \$value = \$o->eval(\$_, { _ => \$_}) };
                 if(\$\@) { _report(['Exception: %s', \$\@->{'exception'}]) }
                 undef
             } \@\$args;
@@ -1381,8 +1386,9 @@ FINI
         if($@) { $o->throw($@) }
         return unless defined $thr;
 
-        my $tid = $thr->tid;
+        $tid = $thr->tid;
         $o->{ithreadMap}->{$tid} = $thr;
+        
         return $tid;
     },
 
@@ -2686,6 +2692,50 @@ FINI
 
 
     #------------------------------------------------------------------------------------
+
+    'follow-HTTP-redirects/usage' => '(follow-HTTP-redirects -url-) : Return the final URL in a chain of redirects.',
+    'follow-HTTP-redirects' => sub {
+        my ($o, $args) = @_;
+        my ($url) = @$args;
+
+        my %traversedUrls = ();
+        my $prevUrl;
+
+        while(defined $url && $url ne '') {
+            if($url !~ /^([^']+)$/) {
+                _report([' !! Unsafe URL detected: <|%s|>', $url]);
+                return;
+            }
+            $url = $1;
+
+            $o->throw("Redirection loop found: $url")
+                if $traversedUrls{$url};
+
+            my $cmd = sprintf "wget --save-headers --max-redirect=0 -O /dev/null '%s'", $url;
+            # _report([' %> %s', $cmd]);
+
+            my $out = `$cmd 2>&1`;
+            $traversedUrls{$url} = 1;
+
+            $prevUrl = $url;
+
+            if($out !~ /Location: (.*?) /s) {
+                undef $url
+            }
+            else {
+                $url = $1;
+
+                if($url !~ /^http.*?:\/\//) {
+                    $prevUrl =~ m~^(http.*?://.*?)/~;
+                    $url = "$1$url";
+                }
+            }
+        }
+
+        return $prevUrl;
+    },
+
+
     # (deref-url $url $options)
     # method     => one of GET PUT POST DELETE.
     # headers    => hash containing request headers.
@@ -2694,6 +2744,7 @@ FINI
     # user       => who's there?
     # password   => don't tell anyone
     # verbose    => show retreival details
+    # qparams    => include query params on URL
     #
     #  Should probably check that the url is /^https?:/ too.
     'deref-url/usage' => "(deref-url -url- -options-) : Fetch -url-, return raw response. Get headers from (http-headers).",
@@ -2704,7 +2755,7 @@ FINI
         return unless defined $url;
         # return if $url =~ /\\|'/;
 
-        my ($method, $headers, $body, $uagent, $user, $password, $useRuntimeCreds, $useRuntimeAppKeys);
+        my ($method, $headers, $body, $qparams, $uagent, $user, $password, $useRuntimeCreds, $useRuntimeAppKeys);
 
         my $verbose     = 0;
         my $noserialize = 0;
@@ -2714,6 +2765,7 @@ FINI
             $method   = uc $options->{method};
             $headers  = $options->{headers};
             $body     = $options->{body};
+            $qparams  = $options->{qparams};
             $uagent   = $options->{'user-agent'};
             $user     = $options->{user};
             $password = $options->{password};
@@ -2774,9 +2826,18 @@ FINI
         my ($cmd, $resp, $respErr);
         my $respErrFile = sprintf "/tmp/.wget.err.%s", $frag;
 
+        if(defined $qparams && ref $qparams eq 'HASH') {
+            $url = "$url?" . join('&', map {
+                        sprintf('%s=%s', _urlencode(encode_utf8 $_), _urlencode(encode_utf8 $qparams->{$_}))
+                    } keys %$qparams);
+        }
+
+        if(defined $options) {
+            $options->{'full-url'} = $url;
+        }
+
 
         my $urlShEnc = $url;
-        # $urlShEnc =~ s/'/\\'/gs;
         $urlShEnc =~ s/\$/\\\$/gs;
 
         if($method eq 'GET') {
@@ -4490,9 +4551,10 @@ FINI
             unless exists $pmClassWhiteList->{$1};
 
         my $code = sprintf 'use %s; new %s(@$args)', $className, $className;
-        # print STDERR " %> $code\n";
+        # _report([" 0%%> %s", $code]);
         my $inst = eval $code;
         $o->throw() if $@;
+        # _report(["inst: <|%s|>", $inst]);
 
         return $inst;
     },
@@ -4501,13 +4563,23 @@ FINI
     'pm-call/usage' => "(pm-call inst methodName Args ...) : Call method on interpreter object",
     'pm-call' => sub {
         my ($o, $args) = @_;
-        my $inst       = shift @$args;
+        my $_inst       = shift @$args;
         my $methodName = shift @$args;
 
+        my $inst = $_inst;
+
+        # _report([" ref 1%%> %s\n", ref $inst]);
+        # _report([" 1%%> %s\n", $inst]);
+
 #----------
+        # $o->throw("Invalid instance '$inst' $methodName")
+        #    unless (scalar $inst) =~ /^(.*)=/;
+        # my $class = $1;
         $o->throw("Invalid instance '$inst' $methodName")
-            unless (scalar $inst) =~ /^(.*)=/;
-        my $class = $1;
+            unless ref $inst;
+        my $class = ref $inst;
+        # _report([" 11%%> %s\n", $inst]);
+        # _report([" 2%%> %s\n", $class]);
 #----------
 #       $class = $inst;
 #----------
@@ -4524,10 +4596,11 @@ FINI
         # map { print STDERR " -- "arg: <|$_|>" \n" } @$args;
 
         my $code = sprintf '$inst->%s(@$args)', $methodName;
-        # print STDERR " %> $code\n";
+        # _report([" 3%%> %s", $code]);;
         my $value = eval $code;
         $o->throw() if $@;
-        # print STDERR " -- value: <|$value|>\n";
+        # _report(["value: <|%s|> %s %s", $value, ref $value, scalar($value)]);
+        # _report(["ref value: <|%s|>", ref $value]);
 
         return $value;
     },
@@ -4806,6 +4879,14 @@ FINI
         return $val;
     },
 
+    'dbi-disconnect/usage' => '(dbi-disconnect -dbh-) : Disconnect db.',
+    'dbi-disconnect' => sub {
+        my ($o, $args) = @_;
+        my ($dbh) = @$args;
+
+        return $dbh->disconnect;
+    },
+
     'dbi-prepare/usage' => '(dbi-prepare -sql-) : Prepare SQL statement.',
     'dbi-prepare' => sub {
         my ($o, $args) = @_;
@@ -4826,14 +4907,6 @@ FINI
         my $errstr = $dbh->errstr;
         $o->throw("DBI error: $errstr") if defined $dbh->err;
         return $val;
-    },
-
-    'dbi-disconnect/usage' => '(dbi-disconnect -dbh-) : Disconnect db.',
-    'dbi-disconnect' => sub {
-        my ($o, $args) = @_;
-        my ($dbh) = @$args;
-
-        return $dbh->disconnect;
     },
 
     'dbi-db/usage' => '(dbi-db -dbh- -method- -args-) : DBI interface.',
@@ -4878,6 +4951,31 @@ FINI
 
         my @list = eval $code;
         return \@list;
+    },
+
+    'dbi-eval-sql/usage' => '(dbi-eval-sql -dbh-) : Eval SQL statement in db.',
+    'dbi-eval-sql' => sub {
+        my ($o, $args) = @_;
+        my ($dbh, $sql, $sqlargs, $names) = @$args;
+
+        my $out = [ ];
+
+        my $sth = $dbh->prepare($sql);
+        my $r = $sth->execute(@$sqlargs);
+        while(my @row = $sth->fetchrow_array) {
+            my $rth = { };
+
+            my $i = 0;
+            my $n = @$names;
+
+            while($i < $n && @row) {
+                $rth->{$names->[$i++]} = shift @row;
+            }
+
+            push @$out, $rth;
+        }
+
+        return $out;
     },
 
     #------------------------------------------------------------------------------------
@@ -5756,9 +5854,65 @@ FINI
 
     #------------------------------------------------------------------------------------
 
-    # '/usage' => '() : .',
-    # '' => sub {
-    # },
+    'calc-decaying-average/usage' => '(calc-decaying-average -half-life- -ts-list-) : Calculate the decaying average of a series of timestamps.',
+    'calc-decaying-average' => sub {
+        my ($o, $args) = @_;
+        my ($halfLifeS, $timestamps, $finalT, $value) = @$args;
+
+        my $decayK = log(2) / $halfLifeS;
+
+        $value  = 0 unless defined $value;
+        my $out = [];
+        my $prevT;
+
+        for my $ts (@$timestamps) {
+            if(defined $prevT) {
+                my $f = exp( -$decayK * ($ts - $prevT));
+                $value *= $f;
+            }
+
+            $prevT = $ts;
+            ++$value;
+
+            push @$out, [$ts, $value];
+        }
+
+        if(defined $finalT) {
+            if(defined $prevT) {
+                my $f = exp( -$decayK * ($finalT - $prevT));
+                $value *= $f;
+            }
+            push @$out, [$finalT, $value];
+        }
+
+        return $out;
+    },
+
+    #------------------------------------------------------------------------------------
+# (def-fn mixin (class vars -- ns)
+#   (= ns (namespace))
+#   (namespace ,$class ,$[vars ns]
+#     (report-vars vars ns)
+#     (foreach v $vars
+#       (report-vars v)
+#       (= $v "${v}@${ns}")))
+#   ())
+
+
+    'mixin/usage' => '(mixin -class- -vars-) : .',
+    'mixin' => sub {
+        my ($o, $args) = @_;
+        my ($class, $vars) = @$args;
+
+        my $ns = $o->{namespace};
+        my $varMapClass = $o->{varMap}->{$class};
+
+        for my $v (@$vars) {
+            unshift @{$o->{varMapClass}->{$v}}, sprintf('%s@%s', $v, $ns);
+        }
+
+        return;
+    },
 
     #------------------------------------------------------------------------------------
 
