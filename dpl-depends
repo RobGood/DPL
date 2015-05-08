@@ -193,7 +193,7 @@ else {
 	}
 
 	if(@havePkgs) {
-		print " -- We have these Packags:\n";
+		print " -- We have these Packages:\n";
 		map { print "      $_\n" } @havePkgs;
 		print "\n";
 	}
