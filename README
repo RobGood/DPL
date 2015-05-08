@@ -7,7 +7,19 @@ I am working towards making the installation as simple as:
   git clone https://github.com/RobGood/DPL.git
   DPL/dpl-install
 
+Future Directions
+-----------------
+
+re-implement dple as DPL app
+standalone HTTP(S) server
+integrate code mirror for better a dple editing UI.
+better git integration
+
+ ... lots more ...
+
+
 Known Bugs
+----------
 
 Function calls ending with a comment break the parser.
   i.e. don't do
@@ -19,18 +31,12 @@ Function calls ending with a comment break the parser.
            // xxx
         )
 
-Anon user has /foo and ~/foo dups in workspace list
-Inner interpreter's (report) output goes to STDERR not log file
+Anon user has /foo and ~/foo dups in workspace list.
 
+Inner interpreter's (report) output goes to STDERR not log file.
 
-Future Directions
+dple is not really good at concurrent update to a descriptor.
 
-re-implement dple as DPL app
-standalone HTTP(S) server
-integrate code mirror for better a dple editing UI.
-
- ... lots more ...
 
 --
-# ©2010-1023 Rob Good
-# $Id: README,v 1.6 2013/04/15 19:51:42 rcgood Exp $  #%^)
+ ©2010-2015 Rob Good
