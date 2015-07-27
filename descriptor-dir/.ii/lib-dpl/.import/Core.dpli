@@ -883,24 +883,25 @@ cnvt_time_to_iso_8601_date {
 sub
 _var_set_simple {
     my ($o, $args) = @_;
+    my ($name, $value) = @$args;
 
-    # _report([' >> _var_set_simple(%s)', $args->[0]]);
+    # _report([' >> _var_set_simple(%s)', $name]);
 
     $o->throw("Expected a var name to be defined here.")
-        unless defined $args->[0];
+        unless defined $name;
 
     my $capture = $o->{_var_capture_info};
     $capture = $o->{varMapNS}
         unless defined $capture;
 
-    my $stack = $capture->{$args->[0]};
+    my $stack = $capture->{$name};
     if(!defined $stack) {
         $stack = [ ];
-        $capture->{$args->[0]} = $stack;
+        $capture->{$name} = $stack;
     }
-    $stack->[0] = $args->[1];
+    $stack->[0] = $value;
 
-    return $args->[1];
+    return $value;
 }
 
 #------------------------------------------------------------------------------------
@@ -1878,7 +1879,9 @@ FINI
             $dir = "$dir/.ii";
         }
 
-        my @names = map { s/^$dir\///; $_ } glob "$dir/$pattern";
+        my @names = map { s/^$dir\///; $_ }
+                      grep { !( /\.tar\.gz$/ || /\/RCS$/ || /\/\@/ || /\/eval-hist-.*$/ ) }
+                        glob "$dir/$pattern";
 
         return \@names;
     },
@@ -2711,7 +2714,9 @@ FINI
             $o->throw("Redirection loop found: $url")
                 if $traversedUrls{$url};
 
-            my $cmd = sprintf "wget --save-headers --max-redirect=0 -O /dev/null '%s'", $url;
+            # We need to do a GET to get the right redirection, (e.g. bit.ly gives 400 error for HEAD requests)
+            # but we don't actually need the body from the final URL.
+            my $cmd = sprintf "wget --save-headers --max-redirect=0 -O - '%s' | perl -nle 'exit if /^\\s*\$/; print'", $url;
             # _report([' %> %s', $cmd]);
 
             my $out = `$cmd 2>&1`;
@@ -3193,10 +3198,27 @@ FINI
             return $value;
         }
 
+#-----------
+if(1) {
         my $stack = $vars->{$var};
         if(defined $stack) {
             return $stack->[0];
         }
+}
+#-----------
+else {
+        my $stack;
+
+        if(exists $vars->{$var}) {
+            $stack = $vars->{$var};
+            return defined $stack? $stack->[0]: undef;
+        }
+
+        if(exists $vars->{self}) {
+            return $vars->{self}->[0]->{$var};
+        }
+}
+#-----------
 
         return undef;
     },

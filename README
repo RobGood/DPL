@@ -1,6 +1,11 @@
-DPL (Descriptor / PrimaLisp) v0.8.45.459 / 2013-04-05 
+DPL (Descriptor / PrimaLisp) v0.8.50 / 2015-07-27
 
-This is the initial release of DPL.
+This is an update to DPL.
+
+
+
+Installation
+------------
 
 I am working towards making the installation as simple as:
 

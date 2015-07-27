@@ -1,9 +1,9 @@
 {
    "_dateCreated" : "Sun Jan 23 01:27:59 2011",
-   "_useCount" : 104,
-   "add" : "(fn ( -- rec t0 t1 expr val hist)\n  (= $self)\n  (= t0 (sprintf %.6f $t0))\n  (= t1 (sprintf %.6f $t1))\n\n  // (report \"e: %s, v: %s\" $expr $val)\n  // (report \"t0: %s, t1: %s, dt: %.6f\" $t0 $t1 (- $t1 $t0))\n  // (= id (hash-get $self / id))\n  // (report \"id: $id\")\n\n  (= rec $[t0 t1 expr val])\n  // (report-vars t0 t1 expr val rec)\n\n  (ii-eval $hist-interp $[rec]\n    (desc-read log log)\n\n    (=  hist (hash-get $log / hist))\n    (=? hist (hash-set $log / hist []))\n\n    (push $hist $rec) // need to use dbm here.\n\n    (desc-write $log log {no-checkpoint 1})))",
+   "_useCount" : 105,
+   "add" : "(fn ( -- rec t0 t1 expr val hist)\n  (= $self)\n  (= t0 (sprintf %.6f $t0))\n  (= t1 (sprintf %.6f $t1))\n\n  // (report \"e: %s, v: %s\" $expr $val)\n  // (report \"t0: %s, t1: %s, dt: %.6f\" $t0 $t1 (- $t1 $t0))\n  // (= id (hash-get $self / id))\n  // (report \"id: $id\")\n\n  (= rec $[t0 t1 expr val])\n  (report-vars t0 t1 expr val rec)\n\n  (ii-eval $hist-interp $[rec]\n    (desc-read log log)\n\n    (=  hist (hash-get $log / hist))\n    (=? hist (hash-set $log / hist []))\n\n    (push $hist $rec) // need to use dbm here.\n\n    (desc-write $log log {no-checkpoint 1})))",
    "get-hist-log" : "(fn ()\n  (ii-eval (hash-get $self / hist-interp) ()\n    (catch\n      (do\n        (desc-read log log)\n        (hash-get $log / hist)      )\n      (do\n        (report 'Exception getting hist log: %s' (desc-to-string $_err))\n        [] ))))",
    "new" : "(fn (id expr)\n  // (report ' >> (%s %s %s)' $. $id $expr)\n  (hash-set $self / id $id)\n  (hash-set $self / hist-interp (ii-new \"eval-hist-$id\"))  \n  (hash-set $self / expr (utf8-decode $expr))\n  (hash-set $self / t0 (time))\n)",
    "on-load" : "(fn ()\n  (def-hash-fn $self / add)\n  (def-hash-fn $self / get-hist-log)\n)",
-   "rcs-id" : "$Id: eval-history,v 1.106 2013/02/12 04:26:32 apache Exp apache $"
+   "rcs-id" : "$Id: eval-history,v 1.1 2015/06/02 07:07:42 www-data Exp www-data $"
 }
