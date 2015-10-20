@@ -100,7 +100,7 @@ while(@ARGV) {
 
 my $cgiDir = PrimaLisp::getCGIDir;
 
-my $descDir =    './descriptor-dir'        if -d './descriptor-dir';
+my $descDir =    './descriptor-dir'        if $0 eq './dpl' && -d './descriptor-dir';
 $descDir = $argDesc                        if ! defined $descDir &&  defined $argDesc;
 $descDir = $ENV{DPL_DESC_DIR}              if ! defined $descDir && exists $ENV{DPL_DESC_DIR} && -d $ENV{DPL_DESC_DIR};
 $descDir = "$ENV{HOME}/descriptor-dir"     if ! defined $descDir && exists $ENV{HOME} && -d "$ENV{HOME}/descriptor-dir";

@@ -1,542 +1,191 @@
-#!/usr/bin/perl -w
-# -*- coding: UTF-8 -*-
-# $Id: dpld,v 1.20 2013/04/05 18:15:11 rcgood Exp $  #%^)
-#
-# This is a wrapper for a standalone HTTP(S) server.
-# Copyright (C) 2011-2013 Rob Good
-#
-# This program is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 2 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License along
-# with this program; if not, write to the Free Software Foundation, Inc.,
-# 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+#!/usr/bin/perl -w -T
 
 BEGIN {
+    $ENV{PATH} = "/bin:/usr/bin:/usr/local/bin";
     push @INC, '.', '/usr/local/lib/perl';
-    $ENV{PATH} = "/usr/local/bin:/usr/bin:/bin";
+    $ENV{PERL5LIB} = "/usr/local/lib/perl";
 }
 
-(my $Pname = $0) =~ s+^.*/++;
-my $Usage = "Usage: $Pname [-restart] [-stop] [-status] [-port <port>] [-desc <desc-dir>]";
+package DPL_Daemon;
 
-#--------------------------------------------------------------------------------------
+use base qw(Net::Server::HTTP);
 
 use PrimaLisp;
+use JSON -convert_blessed_universally;
+use Encode;
+use HTML::Entities;
+use HTTP::Date;
+use DB_File;
 use FileHandle;
-use Time::HiRes qw(time);
-
-#--------------------------------------------------------------------------------------
-# Arg processing
-
-my $doStop    = 0;
-my $doRestart = 0;
-my $doStatus  = 0;
-my $port      = 8088;
-
-my $descDir;
-
-while(@ARGV) {
-	my $arg = shift;
-
-	if($arg !~ /^-/) {
-		unshift @ARGV, $arg;
-		last;
-	}
-
-	   if($arg eq '-port')   { $port      = shift }
-	elsif($arg eq '-desc')   { $descDir   = shift }
-	elsif($arg eq '-stop')   { $doStop    = 1 }
-	elsif($arg eq '-restart'){ $doStop    = 1; $doRestart = 1 }
-	elsif($arg eq '-status') { $doStatus  = 1 }
-
-	else { die " !! $Usage\n" }
-}
-
-my $cgiDir = PrimaLisp::getCGIDir;
-my $wwwDir = PrimaLisp::getWWWDir;
-
-if(!defined $descDir) {
-	# if($0 eq './dpld' && -d 'descriptor-dir') { $descDir =         'descriptor-dir' }
-	# else                                      { $descDir = "$cgiDir/descriptor-dir" }
-
-	$descDir = $ENV{DPL_DESC_DIR};
-    $descDir =         'descriptor-dir'        if $0 eq './dpld' && -d 'descriptor-dir';
-	$descDir = "$cgiDir/descriptor-dir"        if ! defined $descDir;
-
-}
 
 
-#--------------------------------------------------------------------------------------
-# PrimaLisp runtime via $pl.
-
-my $pl;
-
-sub dplLog {
-	my ($msg, $stderrtoo) = @_;
-
-	print STDERR "$msg\n" if defined $stderrtoo;
-	$msg =~ s/'/\\'/g;
-	$pl->eval("(report %s '$msg')");
-}
-
-#--------------------------------------------------------------------------------------
-# Manage pid file.
-
-my $pidFile = "$descDir/.$Pname.$port.pid";
-
-sub getPid {
-	my $pfh = new FileHandle("< $pidFile");
-	return unless defined $pfh;
-
-	my $pid = <$pfh>;
-	close $pfh;
-
-	return $pid;
-}
-
-sub setPid {
-	my ($pid) = @_;
-
-	my $pfh = new FileHandle("> $pidFile.$$");
-	if(!defined $pfh) {
-		dplLog " !! $Pname: Can't write $pidFile: $!", 1;
-		exit 1;
-	}
-
-	print $pfh $pid;
-	close $pfh;
-
-	rename "$pidFile.$$", "$pidFile";
-}
-
-#--------------------------------------------------------------------------------------
-# PrimaLisp runtime setup.
+#-----------------------------------------------------------
 
 sub
-plInit {
-	# To set up the logging file handle properly
-	# we need to call setLogFH() *before* init code is run...
+convert_query_string_to_hash {
+    my ($qstr) = @_;
 
-	# Get a new runtime, arg '1':  no initialization code to be run.
-	$pl = new PrimaLisp(undef, undef, 1);
-	
-	# Get an append file handle on the log file.
-	my $fh = new FileHandle(">> $descDir/.$Pname.log");
-	die " !! $Pname: Can't append to log file ($descDir): $!\n"
-		unless defined $fh;
+    return {} unless defined $qstr;
 
-	# Pass on the file handle for '(report)' logging.
-	$pl->setLogFH($fh);
+    $qstr =~ s/^\?//;
+    my @parts = split '&', $qstr;
 
-	# Now we've set the logFH, we can set the desc dir and run the initialization code.
-	delete $pl->{noInit};
-	$pl->setDescDir($descDir);
+    my $qhash = {};
+    map { my ($n, $v) = split('=', $_); $qhash->{urldecode $n} = urldecode $v if defined $n && defined $v } @parts;
 
-
-	# $pl->eval('(repl)');
-
-	# Throw in some of our own init code, as in dplx.
-
-	my $plInitCode = <<FINI;
-    (drop-builtins sys-fork sys-wait perl-eval init-interpreter)
-    (var-clear :interpreter:)
-FINI
-
-	$pl->evalAll($plInitCode);
-}
-
-#--------------------------------------------------------------------------------------
-# Manage the server.
-
-sub
-startServer {
-	my $pid = getPid;
-
-	if(defined $pid) {
-		# From man perlfunc:
-		# > If SIGNAL is zero, no signal is sent to the process.  This is a
-		# > useful way to check that a child process is alive and hasn’t changed its UID.
-
-		if(kill 0, $pid) {
-			dplLog " !! $Pname: There's a server already running the background...", 1;
-			return 1;
-		}
-
-		warn " !! $Pname: There's a stale pidfile $pidFile here...\n";
-	}
-
-
-	dplLog " ## $Pname: Starting dpld server in the background...", 1;
-	my $svr = new PrimaLisp::dpld($port);
-	$svr->init($pl);
-
-	$pid = $svr->background();
-
-	setPid $pid;
-	dplLog " ## $Pname: Server started, pid $pid...", 1;
-
-	my $pStr = '';
-	dplLog " ## $Pname: To stop server, run:  $Pname -stop -port $port", 1;
-
-	return 0;
-}
-
-sub
-stopServer {
-	my $pid = getPid;
-	if(!defined $pid) {
-		dplLog " !! $Pname: No server is running...", 1;
-		return 0;
-	}
-
-	unlink $pidFile;
-
-	dplLog " ## $Pname: Stopping dpld server (pid $pid)...", 1;
-
-	# From /usr/include/asm/signal.h
-	#define SIGTERM     15
-	kill 15, $pid;
-
-	my $timeout = 2;
-	my $startT  = time;
-
-	while(kill(0, $pid)) {
-		if(time - $startT < $timeout) {
-		    select undef, undef, undef, 0.05;
-			next;
-		}
-
-		dplLog " !! $Pname: Server didn't shutdown after $timeout seconds.", 1;
-		return 1;
-	}
-
-	dplLog " ## $Pname: Server stopped.", 1;
-	return 0;
-}
-
-sub
-reportStatus {
-	my $pid = getPid;
-	if(!defined $pid) {
-		dplLog " ## $Pname: No server found running.", 1;
-		return 0;
-	}
-
-	my $psLine = `ps auxwww | grep '\./dpld' | grep perl | grep -v auxwww`; chomp $psLine;
-
-	dplLog " ## $Pname: Found server, pid $pid", 1;
-	dplLog "$psLine", 1;
-
-	return 0;
-}
-
-#--------------------------------------------------------------------------------------
-# Main code.
-
-plInit;
-
-if(-t STDIN) { $pl->eval("(print-banner 'HTTP Server')", {}) }
-
-if($doRestart) { stopServer ; exec "$0 -port $port -desc $descDir" ; exit 1  }
-
-if($doStop)    { exit stopServer   }
-if($doStatus)  { exit reportStatus }
-
-exit startServer;
-
-#--------------------------------------------------------------------------------------
-# HTTP server subclassed from HTTP::Server::Simple::CGI
-
-{
-# Based on:
-# http://search.cpan.org/~jesse/HTTP-Server-Simple-0.44/lib/HTTP/Server/Simple.pm
-
-package PrimaLisp::dpld;
- 
-use HTTP::Server::Simple::CGI;
-use base qw(HTTP::Server::Simple::CGI);
-
-my $pl;
-my $dispatch;
-
-sub dplLog { main::dplLog @_ }
-
-#------------------------
-
-sub urlencode {
-    my ($str) = @_;
-    $str =~ s/([^\w~.,-])/sprintf("%%%02x", ord $1)/eg;
-    return $str;
-}
-sub urldecode {
-    my ($str) = @_;
-    $str =~ s/\+/ /g;
-    $str =~ s/%([0-9A-Fa-f][0-9A-fa-f])/chr(hex("$1"))/eg;
-    return $str;
-}
-
-#------------------------
-
-sub
-init {
-	my ($o, $in_pl) = @_;
-	$pl = $in_pl;
-
-	$dispatch = {
-		''          => undef, # ignored.  this path internally rewritten to /api/dpld
-		'/'         => undef, # ignored.  this path internally rewritten to /api/dpld
-
-		'/api'      => \&resp_api,	# this path internally rewritten to /api/dplx
-		'/api/dple' => \&resp_dple,
-
-		'/pf-logo-2010-bb.gif' => \&resp_logoImg,
-		'/logo.gif           ' => \&resp_logoImg,
-	};
-
-	return;
-}
- 
-sub
-setup {
-	my $o = shift;
-	dplLog " >> setup()";
-
-	# map { dplLog "$_" } @_;
-	# Need to capture method param and stuff.
-	# Find out how to get request body.
-
-	$o->SUPER::setup(@_);
-}
-
-sub
-reply_not_found {
-	my ($self, $cgi) = @_;
-	$rc = 404;
-
-    printf "HTTP/1.0 %s Not found\r\n", $rc;
-    print $cgi->header,
-          $cgi->start_html('Not found'),
-          $cgi->h1('Not found'),
-          $cgi->end_html;
+    return $qhash;
 }
 
 
 sub
-handle_request {
-	my ($self, $cgi) = @_;
+convert_request_header_to_hash {
+    my ($hdrs) = @_;
 
-	# Whatever we need to put into $env, we need to extract from $cgi.
-  
-    my $path_info = $cgi->path_info();
-	# dplLog " -- path_info: $path_info";
-
-	my @p = split /\//, $path_info;
-	my @q = ( );
-
-	my $cmd;
-
-	while(@p) {
-		$cmd = join '/', @p;
-		  dplLog "cmd?: $cmd";
-		if(exists $dispatch->{$cmd}) { last }
-		unshift @q, pop @p;
-	}
-
-	if(@q && $q[0] eq 'dplx') { shift @q }
-
-	if(!@p && !@q) { push @q, 'dpld'; $cmd = '/api' }
-
-	$path_info = join('/', ('', @q));
-
-	  dplLog " -- path_info: $path_info";
-	  dplLog " -- cmd: $cmd";
-
-	my $queryHash = { };
-	my $query_string = $cgi->query_string;
-	if(defined $query_string) {
-		# dplLog "qs: $query_string";
-		map { my ($n, $v) = split '=', $_; $queryHash->{$n} = urldecode($v) } split '&', $query_string;
-	}
-
-
-	my $request_method = 'GET';
-
-    my $handler = $dispatch->{$cmd};
-
-	my $rc;
-
-    if (ref $handler  eq 'CODE') {
-		my $env = {
-            _Pname                 => $Pname,
-			_user_agent           => 'N/A',
-			_path_info            => $path_info,
-			_query_hash           => $queryHash,
-			_request_method       => $request_method,
-            _script_name          => undef,
-			_request_content_type => undef,
-			_request_content      => undef,
-			_remote_addr          => undef,
-			_remote_port          => undef,
-		};
-
-		$rc = 200;
-
-        printf "HTTP/1.0 %s OK\r\n", $rc;
-        $handler->($cgi, $env);
-    }
-	else {
-		$rc = reply_not_found($self, $cgi);
-    }
-
-	 dplLog sprintf(" +> %s  %s %s", $rc, $request_method, $cgi->url(-full => 1, -path => 1, -query => 1));
-	
-	 return;
+    return { map { lc $_->[0] => $_->[1] } @$hdrs};
 }
 
+#-----------------------------------------------------------
+# Overriding Net:Server::HTTP method here...  It generates an incorrect Date header...
+sub http_base_headers {
+    my $self = shift;
 
-#----------------
+    my $datestr = get_RFC_Date;
 
-# This bootstraps dplx to run the reqest.
+    return [
+        [Date => $datestr ],
+        [Connection => 'close'],
+        [Server => $self->server_revision],
+    ];
+}
+
+#-----------------------------------------------------------
+
+# Handle returning specific files.
+# Not a generalized web server.
+my %contentTypes = (
+  '/robots.txt'  => 'text/plain',
+  '/favicon.ico' => 'image/x-icon',
+);
+
+
+
 sub
-resp_api {
-	my ($cgi, $env) = @_;
-	return if !ref $cgi;
+file_send_from_doc_root_h {
+  my ($server) = @_;
 
-	$pl->setOutputFH(select);
+  my $reqInfo = $server->http_request_info();
+  my $path    = $reqInfo->{request_path};
+  my $method  = $reqInfo->{request_method};
 
-	my $queryHash = { };
-	my $requestContent;
-     
-    ## This should match what is done in dplx.
+  my $contentType = $contentTypes{$path};
+  if(!defined $contentType) {
+    my $msg = 'Nothing Found :(';
+    $server->send_status(404, $msg, "<b>$msg</b>");
+    return;
+  }
 
-    # ACL stuff! 
-    my $ACL_Check_code = '((fn (acl) (if (defined? $acl) ($acl check))) (catch (new-inst dpl-access $req-info)))';
+  my $file = "doc-root$path";
 
-	# Optionally log some parameters from here.
-	my $logCode = '';
+  my $fh = new FileHandle("< $file");
+  if(!defined $fh) {
+    my $msg = 'Nothing Found :(';
+    $server->send_status(404, $msg, "<b>$msg</b>");
+    return;
+  }
 
-	if(0) {
-		$logCode = <<FINI;
-	  (if (is-defined \$_user_agent)           (report (sprintf " --            user_agent: '%s'\n"  \$_user_agent)))
-	  (if (is-defined \$_path_info)            (report (sprintf " --             path_info: '%s'\n"  \$_path_info)))
-	  (if (is-defined \$query-hash)            (report (sprintf " --          query_string: '%s'\n"  
-					  (join & (map-list (lambda (k) (sprintf '%s=%s' \$k (hash-get \$query-hash / \$k))) (hash-keys \$query-hash / ))))))
-	  (if (is-defined \$_request_method)       (report (sprintf " --        request_method: '%s'\n"  \$_request_method)))
-	  (if (is-defined \$_request_content_type) (report (sprintf " --  request_content_type: '%s'\n"  \$_request_content_type)))
+  my $data;
 
-	  (if (is-defined \$_remote_addr) (report (sprintf " --  remote_addr: '%s'\n"  \$_remote_addr)))
-	  (if (is-defined \$_remote_port) (report (sprintf " --  remote_port: '%s'\n"  \$_remote_port)))
-FINI
-	}
+  { local $/ = undef; $data = <$fh> }
+  close $fh;
 
+  my $contentLength = length($data);
+  my @st = stat $file;
 
+  if($method eq 'HEAD') {
+      undef $data;
+  }
 
-	my $tDesc = 'dplx';
+  print sprintf "Last-Modified: %s\r\n", get_RFC_Date($st[9]);
+  print sprintf "Content-Length: %d\r\n", $contentLength;
+  print sprintf "Content-Type: %s\r\n", $contentType;
+  print "\r\n";
+  print $data if defined $data;
 
-	my $code = <<FINI;
-    (drop-builtins sys-fork sys-wait perl-eval init-interpreter)
-    (var-clear :interpreter:)
-
-    (= Pname                 \$_Pname)
-    (= user-agent            \$_user_agent)
-    (= path-info             \$_path_info)
-    (= query-hash            \$_query_hash)
-    (= script-name           \$_script_name)
-    (= request-method        \$_request_method)
-    (= request-content-type  \$_request_content_type)
-    (= request-content       \$_request_content)
-
-    (= remote-addr           \$_remote_addr)
-    (= remote-port           \$_remote_port)
-
-    (= req-info \$[Pname user-agent path-info query-hash script-name request-method request-content-type request-content remote-addr remote-port])
-
-    $logCode
-
-    $ACL_Check_code
-
-    (report "$Pname: Calling (main) in Descriptor %s" $tDesc)
-
-    (desc-read self $tDesc {reload 1})
-    (main \$req-info)
-
-    (report "$Pname: Back from (main) in Descriptor %s" $tDesc)
-
-FINI
-
-	# Run some code that call (main) in the dispatcher Descriptor.
-	eval { $pl->evalAll($code, $env) };
-
-	dplLog " !! $Pname: $@" if $@ && ref $@ ne 'HASH';
-	dplLog " !! $Pname: Exception: $@->{exception}" if exists $@->{exception};
-	dplLog " !! $Pname: Return: $@->{value}"        if exists $@->{value};
+  return;
 }
- 
 
-# This handler is a bit of a workaround to run the existing cgi dple, until dple is reimplemented in dpl.
 sub
-resp_dple {
-	my ($cgi, $env) = @_;
-	return if !ref $cgi;
+default_root_h {
+    my ($server) = @_;
 
+    my $reqInfo    = $server->http_request_info();
+    # printf STDERR "reqInfo: %s\n", to_json($reqInfo, {pretty => 1});
 
-	$pl->setOutputFH(select);
+    my $pathInfo   =  $reqInfo->{request_path};
+    my $method     =  $reqInfo->{request_method};
 
-	my $qs = $cgi->query_string;
-	$qs =~ s/[\&=]/ /g;
+    my $query_hash  = convert_query_string_to_hash $reqInfo->{query_string};
+    my $header_hash = convert_request_header_to_hash $reqInfo->{request_headers};
 
-    my $path_info = $cgi->path_info();
-	my @p = split '/', $path_info;
-	shift @p; # ''
-	shift @p; # 'api'
-	shift @p; # 'dple'
-	$path_info = join '/', ('', @p);
+    printf STDERR "query_hash: %s\n", encode_utf8 to_json($query_hash, {pretty => 1});
+    printf STDERR "header_hash: %s\n", encode_utf8 to_json($header_hash, {pretty => 1});
 
-	$ENV{PATH_INFO} = $path_info;
+    # ...
+    print "Content-Type: text/plain\r\n";
+    print "\r\n";
+    print "fnord!\n";
 
-	# my $cmd = "cd $cgiDir && $cgiDir/dple $path_info $qs";
-	# my $cmd = "cd $cgiDir && $cgiDir/dple";
-	  my $cmd = "cd $descDir/.. && $descDir/../dple";
-	  dplLog "cmd: $cmd";
-
-	  my $envbin = '/bin/env';
-      if(!-f $envbin) { $envbin = '/usr/bin/env' }
-
-	  # system "$envbin | sort 1>&2";
-
-	print `$cmd`;
-
-	return;
+    return;
 }
 
+#--------------------------------
 
-# A bit of a hack for logo image to appear not broken.
-sub
-resp_logoImg {
-	my ($cgi, $env) = @_;
+my $Version = '$Revision: 1.24 $';
+$Version =~ / (.+) /;
+$Version = $1;
 
-	my $logoFile = "$wwwDir/logo.gif";
-	   $logoFile = "$wwwDir/pf-logo-2010-bb.gif" unless -f $logoFile;
+# dev hack
+my $hostname = `/bin/hostname`;  chomp $hostname;
 
-	my $logoImg;
+# Untainting.
+die sprintf("[%s] Invalid hostname", scalar(gmtime))
+    unless $hostname =~ /^([\w-]+)$/;
 
-	my $fh = new FileHandle("< $logoFile");
-	{ local $/ = undef; $logoImg = <$fh> }
-	close $fh;
+$hostname = $1;
 
-	print $cgi->header('-type' => 'image/gif');
-	print $logoImg;
+my $http_port  = $hostname =~ /^rcg-mint\d+/ ? 8080 : 80;
+my $https_port = $hostname =~ /^rcg-mint\d+/ ? 8443 : 443;
+# dev hack
 
-	return;
-}
+printf STDERR "[%s] Starting on %s, port %d version %s\n", scalar(gmtime), $hostname, $http_port, $Version;
 
-} 
- 
+#-----------------------------------------------------------
+# Start the server.
+
+DPL_Daemon->run(
+    # port  => [ $http_port, "$https_port/ssl" ],
+      port  => [ $http_port ],
+
+
+    # user => 'nobody',  group => 'nogroup',
+
+    ipv   => '*', # IPv6 if available
+
+    # SSL_key_file  => '/etc/ssl/private/primal_bundle_2014.pem',
+    # SSL_cert_file => '/etc/ssl/private/primal_bundle_2014.pem',
+
+    access_log_file => 'access.log',
+    log_file        => 'error.log',
+
+    server_revision => "-version-",
+
+    app => [
+      { '/robots.txt'      => sub { file_send_from_doc_root_h @_ } },
+      { '/favicon.ico'     => sub { file_send_from_doc_root_h @_ } },
+      { '/'                => sub { default_root_h @_ } },
+    ],
+);
+
+
+exit 0;
+

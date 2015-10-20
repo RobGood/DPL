@@ -947,20 +947,20 @@ sub _assertIsValidTypeName { PrimaLisp::_assertIsValidTypeName @_ }
     '%'   => sub { my ($o, $args) = @_;   $args->[0]  % $args->[1] },
     '..'  => sub { my ($o, $args) = @_; [ $args->[0] .. $args->[1] ] },
 
-    '<'   => sub { my ($o, $args) = @_; while(@$args >= 2 && $args->[0]  < $args->[1]) { shift @$args } return @$args == 1? 1: 0 },
-    '>'   => sub { my ($o, $args) = @_; while(@$args >= 2 && $args->[0]  > $args->[1]) { shift @$args } return @$args == 1? 1: 0 },
-    '<='  => sub { my ($o, $args) = @_; while(@$args >= 2 && $args->[0] <= $args->[1]) { shift @$args } return @$args == 1? 1: 0 },
-    '>='  => sub { my ($o, $args) = @_; while(@$args >= 2 && $args->[0] >= $args->[1]) { shift @$args } return @$args == 1? 1: 0 },
-    '=='  => sub { my ($o, $args) = @_; while(@$args >= 2 && $args->[0] == $args->[1]) { shift @$args } return @$args == 1? 1: 0 },
-    '!='  => sub { my ($o, $args) = @_; while(@$args >= 2 && $args->[0] != $args->[1]) { shift @$args } return @$args == 1? 1: 0 },
+    '<'   => sub { my ($o, $args) = @_; while(@$args >= 2 && $args->[0]  < $args->[1]) { shift @$args } return @$args == 1? JSON::true: JSON::false },
+    '>'   => sub { my ($o, $args) = @_; while(@$args >= 2 && $args->[0]  > $args->[1]) { shift @$args } return @$args == 1? JSON::true: JSON::false },
+    '<='  => sub { my ($o, $args) = @_; while(@$args >= 2 && $args->[0] <= $args->[1]) { shift @$args } return @$args == 1? JSON::true: JSON::false },
+    '>='  => sub { my ($o, $args) = @_; while(@$args >= 2 && $args->[0] >= $args->[1]) { shift @$args } return @$args == 1? JSON::true: JSON::false },
+    '=='  => sub { my ($o, $args) = @_; while(@$args >= 2 && $args->[0] == $args->[1]) { shift @$args } return @$args == 1? JSON::true: JSON::false },
+    '!='  => sub { my ($o, $args) = @_; while(@$args >= 2 && $args->[0] != $args->[1]) { shift @$args } return @$args == 1? JSON::true: JSON::false },
     '<=>' => sub { my ($o, $args) = @_; $args->[0] <=> $args->[1] },
 
-    'lt'  => sub { my ($o, $args) = @_; while(@$args >= 2 && $args->[0] lt $args->[1]) { shift @$args } return @$args == 1? 1: 0 },
-    'gt'  => sub { my ($o, $args) = @_; while(@$args >= 2 && $args->[0] gt $args->[1]) { shift @$args } return @$args == 1? 1: 0 },
-    'le'  => sub { my ($o, $args) = @_; while(@$args >= 2 && $args->[0] le $args->[1]) { shift @$args } return @$args == 1? 1: 0 },
-    'ge'  => sub { my ($o, $args) = @_; while(@$args >= 2 && $args->[0] ge $args->[1]) { shift @$args } return @$args == 1? 1: 0 },
-    'eq'  => sub { my ($o, $args) = @_; while(@$args >= 2 && $args->[0] eq $args->[1]) { shift @$args } return @$args == 1? 1: 0 },
-    'ne'  => sub { my ($o, $args) = @_; while(@$args >= 2 && $args->[0] ne $args->[1]) { shift @$args } return @$args == 1? 1: 0 },
+    'lt'  => sub { my ($o, $args) = @_; while(@$args >= 2 && $args->[0] lt $args->[1]) { shift @$args } return @$args == 1? JSON::true: JSON::false },
+    'gt'  => sub { my ($o, $args) = @_; while(@$args >= 2 && $args->[0] gt $args->[1]) { shift @$args } return @$args == 1? JSON::true: JSON::false },
+    'le'  => sub { my ($o, $args) = @_; while(@$args >= 2 && $args->[0] le $args->[1]) { shift @$args } return @$args == 1? JSON::true: JSON::false },
+    'ge'  => sub { my ($o, $args) = @_; while(@$args >= 2 && $args->[0] ge $args->[1]) { shift @$args } return @$args == 1? JSON::true: JSON::false },
+    'eq'  => sub { my ($o, $args) = @_; while(@$args >= 2 && $args->[0] eq $args->[1]) { shift @$args } return @$args == 1? JSON::true: JSON::false },
+    'ne'  => sub { my ($o, $args) = @_; while(@$args >= 2 && $args->[0] ne $args->[1]) { shift @$args } return @$args == 1? JSON::true: JSON::false },
     'cmp' => sub { my ($o, $args) = @_; $args->[0] cmp $args->[1] },
 
     '!'  => sub { my ($o, $args) = @_; !$args->[0] },
@@ -976,9 +976,9 @@ sub _assertIsValidTypeName { PrimaLisp::_assertIsValidTypeName @_ }
         if(my $val = $o->eval(shift(@$args), $env)) {
             while(@$args &&  ($val = $o->eval($args->[0], $env)) ) { shift @$args }
 
-            return @$args? 0: $val;
+            return @$args? JSON::false: $val;
         }
-        return 0;
+        return JSON::false;
     },
 
     #  || is false if all its args are false, and true  otherwise.
@@ -993,7 +993,7 @@ sub _assertIsValidTypeName { PrimaLisp::_assertIsValidTypeName @_ }
         if(!($val = $o->eval(shift(@$args), $env))) {
             while(@$args && !($val = $o->eval($args->[0], $env)) ) { shift @$args }
 
-            return @$args? $val: 0;
+            return @$args? $val: JSON::false;
         }
         return $val;
     },
