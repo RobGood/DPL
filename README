@@ -1,4 +1,4 @@
-DPL (Descriptor / PrimaLisp) v0.8.50 / 2015-07-27
+DPL (Descriptor / PrimaLisp) v0.8.51 / 2015-10-20
 
 This is an update to DPL.
 
@@ -10,13 +10,17 @@ Installation
 I am working towards making the installation as simple as:
 
   git clone https://github.com/RobGood/DPL.git
+
+  cd DPL && ./dpl
+    or
   DPL/dpl-install
+
 
 Future Directions
 -----------------
 
 re-implement dple as DPL app
-standalone HTTP(S) server
+standalone HTTP(S) server, dpld
 integrate code mirror for better a dple editing UI.
 better git integration
 
