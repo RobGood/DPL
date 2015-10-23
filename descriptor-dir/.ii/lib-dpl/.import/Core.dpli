@@ -2928,7 +2928,6 @@ FINI
                 return if !defined $respBody || $respBody eq '';
 
                 my $j = new JSON;
-                _report(["respbody: \n%s", $respBody]);
                 return $j->allow_nonref->decode(decode_utf8 $respBody);
             }
             elsif($ct =~ /text\/plain/) {
