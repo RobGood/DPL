@@ -1285,7 +1285,14 @@ FINI
 		}
 		else {
 			# JSONview likes this, but there may be encoding issues later, or not...
-            $j = $j->pretty->canonical;
+            $j = $j->pretty;
+            if(!exists $options->{canonical}) {
+                $options->{canonical} = 1;
+            }
+		}
+
+		if($options->{canonical}) {
+            $j = $j->canonical;
 		}
 
         my $str = eval { $j->encode($val) };
