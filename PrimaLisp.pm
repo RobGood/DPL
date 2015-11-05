@@ -85,8 +85,8 @@ $logFH = STDERR;
 sub
 _report {
     my ($msg) = @_;
-	# if(ref $msg) { printf STDERR " >> _report(%s)\n", join(',', @$msg) }
-	# else         { printf STDERR " >> _report(%s)\n", $msg            }
+    # if(ref $msg) { printf STDERR " >> _report(%s)\n", join(',', @$msg) }
+    # else         { printf STDERR " >> _report(%s)\n", $msg            }
 
     if(ref $msg eq 'ARRAY') {
         # map { printf STDERR " -- msg: %s\n", utf8::is_utf8($_)? encode_utf8($_): $_ } @$msg;
@@ -104,7 +104,7 @@ _report {
     if($GetThreadIdFn) { $tid = &$GetThreadIdFn }
     $tid = defined $tid && $tid? sprintf("#%d", $tid): '';
 
-	$logFH->autoflush(1);
+    $logFH->autoflush(1);
 
     my $now = time;
     printf $logFH " %s [%.6f %s]%s %s\n",
@@ -150,9 +150,9 @@ throw {
     }
 
     my $cast = {
-		callstack => $cs,
-		exception => defined $e? $e: $@
-	};
+        callstack => $cs,
+        exception => defined $e? $e: $@
+    };
 
     if($o->{debug}) {
         _report(sprintf(" ** ********* Caught this exception for you: %s", $cast->{exception}));
@@ -179,7 +179,7 @@ _return {
     my ($value) = @_;
     # print STDERR " >> _return($value)\n";
 
-	if(@_ > 1) { die { values => \@_ }}
+    if(@_ > 1) { die { values => \@_ }}
     die { value => $value };
 
     return;
@@ -260,7 +260,7 @@ _xmldecode {
     # print STDERR " >> _xmldecode($text)\n";
 
     decode_entities($text);
-	return $text;
+    return $text;
 }
 
 
@@ -340,10 +340,10 @@ getPerlDir {
 #X# |>)
 sub
 shuffleList {
-	my ($o, $list) = @_;
-	# $lgr->Enter("shuffleList($list)");
+    my ($o, $list) = @_;
+    # $lgr->Enter("shuffleList($list)");
 
-	return [ map { $_->[1] } sort { $a->[0] <=> $b->[0] } map { [ rand, $_ ] } @$list ];
+    return [ map { $_->[1] } sort { $a->[0] <=> $b->[0] } map { [ rand, $_ ] } @$list ];
 }
 
 
@@ -393,11 +393,11 @@ my $Default_builtinsMap = {
 
 
     # TODO make this a native language builtin.
-	'foreach/usage' => '(foreach -var- -in-list- -body-) : Evaluate -body- with -var- bound to each element in -in-list-.',
-	'foreach/ismacro' => 1,
-	'foreach' => '(fn (.var .in-list &.exprs)
-			((fn (.body-fn) (map-list (fn (.i) ($.body-fn $.i)) (eval $.in-list)))
-		(sprintf "(fn (%s) %s)" (eval $.var) (join " " $.exprs))))',
+    'foreach/usage' => '(foreach -var- -in-list- -body-) : Evaluate -body- with -var- bound to each element in -in-list-.',
+    'foreach/ismacro' => 1,
+    'foreach' => '(fn (.var .in-list &.exprs)
+            ((fn (.body-fn) (map-list (fn (.i) ($.body-fn $.i)) (eval $.in-list)))
+        (sprintf "(fn (%s) %s)" (eval $.var) (join " " $.exprs))))',
 
 
 
@@ -406,10 +406,10 @@ my $Default_builtinsMap = {
     'def-hash-fn' => '(fn (self path fn -- api)
         (if (hash? (var-set api $path))
           (foreach path (hash-keys $api /)
-		    (foreach name (hash-get $api / $path)
+            (foreach name (hash-get $api / $path)
               // (report " -> %s - %s (%s)" $path $name)
               (def-hash-fn $self $path $name)))
-		  (var-set $fn (utf8-decode (hash-eval $self $path $fn)) {path $path desc-name $self/name})))',
+          (var-set $fn (utf8-decode (hash-eval $self $path $fn)) {path $path desc-name $self/name})))',
 
     'def-desc-fn/usage' => '(def-desc-fn -desc- -path- -name-) : Define function -name- from expression in -desc- at -path- / -name- (using /refer-to inheritance).',
     'def-desc-fn' => '(fn (self path fn) (var-set $fn (desc-eval $self $path $fn) {path $path}))',
@@ -433,17 +433,17 @@ my $Default_builtinsMap = {
             else                   { $source = $options->{source} }
         }
 
-		#-----
-		# (update-DPL-dist) modifies some code here (post-installation) to make the
-		# default (update-DPL-dist) source host the host providing the dist file. 
-		# /8467ecb92e76efbb21eed29b9c9ec9d0
+        #-----
+        # (update-DPL-dist) modifies some code here (post-installation) to make the
+        # default (update-DPL-dist) source host the host providing the dist file. 
+        # /8467ecb92e76efbb21eed29b9c9ec9d0
 
-		## if(!defined $source || $source eq '') { $o->throw("No source specified and no default source available.") }
+        ## if(!defined $source || $source eq '') { $o->throw("No source specified and no default source available.") }
 
         $source = 'srvdevlnx01'            unless defined $source;
         # $source = 'update.dpl.primal.com'  unless defined $source;
         # $source = 'update.dpl.org'         unless defined $source;
-		#-----
+        #-----
 
 
         my $dryrun = 0;
@@ -537,29 +537,29 @@ my $Default_builtinsMap = {
 
 
 
-	if(1) {
-		# /8467ecb92e76efbb21eed29b9c9ec9d0
-		my $usifh = new FileHandle("< $perlDir/PrimaLisp.pm");
-		my $usofh = new FileHandle("> $perlDir/PrimaLisp.pm.$$");
+    if(1) {
+        # /8467ecb92e76efbb21eed29b9c9ec9d0
+        my $usifh = new FileHandle("< $perlDir/PrimaLisp.pm");
+        my $usofh = new FileHandle("> $perlDir/PrimaLisp.pm.$$");
 
-		my $inject = "        \$source = '$source' if !defined \$source;";
+        my $inject = "        \$source = '$source' if !defined \$source;";
 
-		while(<$usifh>) {
-			if(defined $inject && m/8467ecb92e76efbb21eed29b9c9ec9d0$/) {
-				print $usofh "$inject\n";
-				undef $inject;
-			}
+        while(<$usifh>) {
+            if(defined $inject && m/8467ecb92e76efbb21eed29b9c9ec9d0$/) {
+                print $usofh "$inject\n";
+                undef $inject;
+            }
 
-			print $usofh $_;
-		}
+            print $usofh $_;
+        }
 
-		close $usifh;
-		close $usofh;
-		
+        close $usifh;
+        close $usofh;
+        
         chmod 0444, "$perlDir/PrimaLisp.pm.$$";
-		rename "$perlDir/PrimaLisp.pm.$$", "$perlDir/PrimaLisp.pm";
-		# /8467ecb92e76efbb21eed29b9c9ec9d0
-	}
+        rename "$perlDir/PrimaLisp.pm.$$", "$perlDir/PrimaLisp.pm";
+        # /8467ecb92e76efbb21eed29b9c9ec9d0
+    }
 
         my $version = from_json `dpl -version < /dev/null`;
 
@@ -776,11 +776,11 @@ my $Default_builtinsMap = {
           while(@$args) {
             # Get the function name (or prefix if no exact match).
             $fn = shift @$args;
-			last unless defined $fn;
+            last unless defined $fn;
 
             # The function's usage message is an attribute of the variable holding the function.
             my $attr = "$fn/usage";
-			# _report([ 'attr: %s', $attr]);
+            # _report([ 'attr: %s', $attr]);
 
             my @attrs;
 
@@ -798,22 +798,22 @@ my $Default_builtinsMap = {
                   map { _report "attrs: $_" } @attrs;
             }
 
-			my $msgFound = 0;
+            my $msgFound = 0;
 
             map {
-				my $msg;
+                my $msg;
                 # _report "fn: $fn, _: $_";
                    if(exists $vr->{$_}) { $msg = decode_utf8 $vr->{$_}->[0] }
                 elsif(exists $bi->{$_}) { $msg = decode_utf8 $bi->{$_}->[0] }
 
                 # _report $msg;
-				if(defined $msg && !ref $msg) {
-					push @msg, $msg;
-					$msgFound = 1;
-				}
+                if(defined $msg && !ref $msg) {
+                    push @msg, $msg;
+                    $msgFound = 1;
+                }
             } @attrs;
 
-			_report "No help for function $fn..." unless $msgFound;
+            _report "No help for function $fn..." unless $msgFound;
           }
         }
 
@@ -860,31 +860,31 @@ my $Default_builtinsMap = {
 
     'callstack/usage' => "(callstack) : Return current call stack.",
     'callstack' => sub {
-		my ($o, $args) = @_;
+        my ($o, $args) = @_;
 
-		return [ map { $_ } @{$o->{varMapNS}->{'.'}} ];
-	},
+        return [ map { $_ } @{$o->{varMapNS}->{'.'}} ];
+    },
 
     'print-banner/usage' => "(print-banner -name-) : Print a banner message.",
     'print-banner' => sub {
         my ($o, $args) = @_;
-		my ($name) = @$args;
+        my ($name) = @$args;
         # print STDERR " >> print-banner($o, $args)\n";
 
-		$name = '' unless defined $name;
-		$name = " $name" if $name;
+        $name = '' unless defined $name;
+        $name = " $name" if $name;
 
-		my $year = `date +%Y`; chomp $year;
-		$year = "2010-$year" unless $year eq '2010';
+        my $year = `date +%Y`; chomp $year;
+        $year = "2010-$year" unless $year eq '2010';
 
-		my $ofh = $o->{ofh};
+        my $ofh = $o->{ofh};
 
-		my $cprtNotice = $PrimaLisp::cprtNotice;
+        my $cprtNotice = $PrimaLisp::cprtNotice;
 
-		printf $ofh " ** Descriptor/PrimaLisp%s (v%s %s)\n", $name, $Version, $VDate;
-		printf $ofh " ** ©%s %s\n", $year, $cprtNotice if defined $cprtNotice;
+        printf $ofh " ** Descriptor/PrimaLisp%s (v%s %s)\n", $name, $Version, $VDate;
+        printf $ofh " ** ©%s %s\n", $year, $cprtNotice if defined $cprtNotice;
 
-		return;
+        return;
     },
 
     'version/usage' => "(version) : Returns a Map containing this interpreter's version and date.",
@@ -939,7 +939,7 @@ my $Default_builtinsMap = {
             'n-evals' => $o->{n_evals},
             'n-evals-per-cpu-s' => $evalRate,
 
-			'lock-hold-time-s' => $o->{lockHoldTimes},
+            'lock-hold-time-s' => $o->{lockHoldTimes},
         );
 
         if(defined $bogomips) {
@@ -983,16 +983,16 @@ my $Default_builtinsMap = {
         my ($o, $args) = @_;
         # print STDERR " >> drop-builtins($o, $args)\n";
 
-		if(ref $args->[0] eq 'HASH') {
-			my $zapall = $args->[0]->{'zap-all'};
+        if(ref $args->[0] eq 'HASH') {
+            my $zapall = $args->[0]->{'zap-all'};
 
-			if(defined $zapall && $zapall) {
-				$args = { map { $_ => 1 }  grep { !m/\//  } keys %{$o->{builtinsMap}} };
-				$args = [ sort keys %$args ];
-				
-				_report([' !! Zapping all builtins: %s', join(',', @$args)]);
-			}
-		}
+            if(defined $zapall && $zapall) {
+                $args = { map { $_ => 1 }  grep { !m/\//  } keys %{$o->{builtinsMap}} };
+                $args = [ sort keys %$args ];
+                
+                _report([' !! Zapping all builtins: %s', join(',', @$args)]);
+            }
+        }
 
         for my $name (@$args) {
             if(!exists $o->{builtinsMap}->{$name}) { 
@@ -1004,11 +1004,11 @@ my $Default_builtinsMap = {
 
                 # Zap.
                 delete $bi->{$name};
-				# _report(['Zapped %s', $name]);
+                # _report(['Zapped %s', $name]);
 
                 # Don't forget to zap attributes too.
-				my $name0 = $name;
-				$name0 =~ s/([*+?&])/\\$1/g;
+                my $name0 = $name;
+                $name0 =~ s/([*+?&])/\\$1/g;
                 map { delete $bi->{$_} } grep { m~^$name0/~ } keys %$bi;
 
                 # Leave a message in its place for logging any future calls to dropped builtin.
@@ -1082,7 +1082,7 @@ my $Default_builtinsMap = {
             $pl = $pl->{outerInterp};
         }
 
-		# _report([' !! Error: %s', $!]) unless defined $fh;
+        # _report([' !! Error: %s', $!]) unless defined $fh;
         $o->throw("(bi-import): 1. Can't import '$importName': $!")
             unless defined $fh;
 
@@ -1130,18 +1130,18 @@ FINI
 
         # Save and overwrite current builtin Map references.
         # map { $stash->{$_} = $bi->{$_}; $bi->{$_} = $importMap->{$_} } keys %$importMap;
-		# 
-		# But don't overwite dropped builtins!
+        # 
+        # But don't overwite dropped builtins!
           map {
-			if(exists $bi->{$_} && ref $bi->{$_} eq 'HASH' && $bi->{$_}->{state} eq 'dropped') {
-				my $msg = " !! An attempt to re-import a droppped builtins has been thwarted.";
-				_report(['%s', $msg]);
-				$o->throw($msg);
-			}
+            if(exists $bi->{$_} && ref $bi->{$_} eq 'HASH' && $bi->{$_}->{state} eq 'dropped') {
+                my $msg = " !! An attempt to re-import a droppped builtins has been thwarted.";
+                _report(['%s', $msg]);
+                $o->throw($msg);
+            }
 
-			$stash->{$_} = $bi->{$_};
-			$bi->{$_} = $importMap->{$_};
-		} keys %$importMap;
+            $stash->{$_} = $bi->{$_};
+            $bi->{$_} = $importMap->{$_};
+        } keys %$importMap;
 
         # Eval rest of args.
         my $val;
@@ -1188,12 +1188,12 @@ FINI
     'sort-pred/ismacro' => 1,
     'sort-pred' => sub {
         my ($o, $args) = @_;
-		# _report(" >> (sort-pred $args->[0] $args->[1])");
+        # _report(" >> (sort-pred $args->[0] $args->[1])");
 
-		my $list = $o->eval($args->[1], {});
-		# _report(['list: %s %d', $list, scalar(@$list)]);
+        my $list = $o->eval($args->[1], {});
+        # _report(['list: %s %d', $list, scalar(@$list)]);
 
-		my $fn = $args->[0];
+        my $fn = $args->[0];
 
         return [ sort { scalar $o->eval("(_fn \$_a \$_b)", { _fn => $fn, _a => $a, _b => $b }) } @$list ];
     },
@@ -1226,7 +1226,7 @@ FINI
     'shuffle-list/usage' => "(shuffle-list -list-) : Return a randomly shuffled form of -list-.",
     'shuffle-list' => sub {
         my ($o, $args) = @_;
-		my ($list) = @$args;
+        my ($list) = @$args;
         # print STDERR " >> map-list($o, $a)\n";
 
         # return [ map { $_->[1] } sort { $a->[0] <=> $b->[0] } map { [ rand, $_ ] } @{$args->[0]} ];
@@ -1241,7 +1241,7 @@ FINI
         my ($o, $args) = @_;
         $o->throw($args->[0]);
 
-		# NOTREACHED #
+        # NOTREACHED #
     },
 
 
@@ -1275,31 +1275,31 @@ FINI
 
         my $j = JSON->new->allow_blessed->allow_nonref->convert_blessed;
 
-		if($options->{ascii}) {
-			# Safer, but JSONview mis-renders Unicode strings.
+        if($options->{ascii}) {
+            # Safer, but JSONview mis-renders Unicode strings.
             $j = $j->ascii;
-		}
+        }
 
-		if($options->{compact}) {
+        if($options->{compact}) {
             ;
-		}
-		else {
-			# JSONview likes this, but there may be encoding issues later, or not...
+        }
+        else {
+            # JSONview likes this, but there may be encoding issues later, or not...
             $j = $j->pretty;
             if(!exists $options->{canonical}) {
                 $options->{canonical} = 1;
             }
-		}
+        }
 
-		if($options->{canonical}) {
+        if($options->{canonical}) {
             $j = $j->canonical;
-		}
+        }
 
         my $str = eval { $j->encode($val) };
 
         my $e = $@;
         if($e) {
-			# _report("2. val: $val");
+            # _report("2. val: $val");
             $o->throw("$e\n$val");
         }
 
@@ -1332,9 +1332,9 @@ FINI
                     $_[1] = $o->eval($val, { });
                 }
             }
-			elsif($val eq 'true' ) { $_[1] = JSON::true }
-			elsif($val eq 'false') { $_[1] = JSON::false }
-			elsif($val eq 'null' ) { $_[1] = JSON::null }
+            elsif($val eq 'true' ) { $_[1] = JSON::true }
+            elsif($val eq 'false') { $_[1] = JSON::false }
+            elsif($val eq 'null' ) { $_[1] = JSON::null }
             elsif(ref $val eq 'ARRAY' ) { map { defined $_         && $o->_postdeserialize($_)         } @$val      }
             elsif(ref $val eq 'HASH'  ) { map { defined $val->{$_} && $o->_postdeserialize($val->{$_}) } keys %$val }
 
@@ -1546,13 +1546,13 @@ hashLookup {
                   defined $path && (ref $path eq 'ARRAY' || $path =~ m~^/~               ) &&
                   1;
 
-	if(ref $path ne 'ARRAY') {
-		$path = [ split '/', $path ];
-		shift @$path;
-	}
-	else {
-		$path = [ @$path ];
-	}
+    if(ref $path ne 'ARRAY') {
+        $path = [ split '/', $path ];
+        shift @$path;
+    }
+    else {
+        $path = [ @$path ];
+    }
 
     while(@$path && $desc) {
         my $name = shift @$path;
@@ -1565,7 +1565,7 @@ hashLookup {
         $desc = $desc->{$name};
     }
 
-	my $clearedValue;
+    my $clearedValue;
 
     if(defined $name) {
            if(defined $value) {                 $desc->{$name} = $value               }
@@ -1743,13 +1743,13 @@ referToLookup {
 #X# |>)
 sub
 getFullPathFromPath {
-	my ($o, $path) = @_;
-	# print STDERR " >> : getFullPathFromPath($path)\n";
+    my ($o, $path) = @_;
+    # print STDERR " >> : getFullPathFromPath($path)\n";
 
    
     # Look in current descriptor dir
     my $fullPath = "$o->{descDir}/$path";
-	# print STDERR " -- : test fullPath: $fullPath\n";
+    # print STDERR " -- : test fullPath: $fullPath\n";
 
     my @s = stat $fullPath;
     if(@s) { return $fullPath }
@@ -1757,7 +1757,7 @@ getFullPathFromPath {
     
     # Look in current inner descriptor dir
     my @fullPathList = (glob("$o->{descDir}/$path"), glob("$o->{descDir}/.ii/lib-*/$path"));
-	# printf STDERR " -- : fullPathList: %s\n", join(', ', @fullPathList);
+    # printf STDERR " -- : fullPathList: %s\n", join(', ', @fullPathList);
     if(@fullPathList) {
         while(@fullPathList) {
             $fullPath = shift @fullPathList;
@@ -1773,7 +1773,7 @@ getFullPathFromPath {
     # Look in outer interpter...
     if(exists $o->{outerInterp}) { return $o->{outerInterp}->getFullPathFromPath($path) }
 
-	return;
+    return;
 }
 
 
@@ -1800,28 +1800,28 @@ sub
 evalAll {
     my ($o, $expr, $vars) = @_;
     # print STDERR sprintf(" >>%s evalAll(%s..., %s)\n", ('>' x $_eadepth++), substr(defined $expr? $expr: '()', 0, 300), $vars);
-	# if(ref $expr eq 'ARRAY') { map { print STDERR " -- %s\n", $_ } @$expr }
-	# if(exists $o->{varMapNS}->{'.'}) { printf STDERR " ** \n%s\n ** \n", join("\n",  @{$o->{varMapNS}->{'.'}}) }
+    # if(ref $expr eq 'ARRAY') { map { print STDERR " -- %s\n", $_ } @$expr }
+    # if(exists $o->{varMapNS}->{'.'}) { printf STDERR " ** \n%s\n ** \n", join("\n",  @{$o->{varMapNS}->{'.'}}) }
 
-	my $value;
+    my $value;
 
-	if(defined $expr) {
+    if(defined $expr) {
 
-		$vars = { } unless defined $vars;
+        $vars = { } unless defined $vars;
 
-		if(ref $expr eq 'ARRAY') {
-			map { $value = $o->eval($_, $vars) } @$expr;
-		}
-		else {
-			# build a cache a list here for use above...
-			while(defined $expr && $expr ne '') {
-				($value, $expr) = $o->eval($expr, $vars);
-			}
-		}
-	}
+        if(ref $expr eq 'ARRAY') {
+            map { $value = $o->eval($_, $vars) } @$expr;
+        }
+        else {
+            # build a cache a list here for use above...
+            while(defined $expr && $expr ne '') {
+                ($value, $expr) = $o->eval($expr, $vars);
+            }
+        }
+    }
 
-	# --$_eadepth;
-	# print STDERR sprintf(" <<%s evalAll() returns\n", ('<' x $_eadepth));
+    # --$_eadepth;
+    # print STDERR sprintf(" <<%s evalAll() returns\n", ('<' x $_eadepth));
 
     return $value;
 }
@@ -1866,9 +1866,9 @@ eval {
 
     $pf->click(__LINE__) if defined $pf;
 
-	if(length($expr) > 125400) {
-		_report([' !! Warning: Long expresssion (len %d, <|%s|>) might break eval here!', length($expr), substr($expr, 0, 100)]);
-	}
+    if(length($expr) > 125400) {
+        _report([' !! Warning: Long expresssion (len %d, <|%s|>) might break eval here!', length($expr), substr($expr, 0, 100)]);
+    }
 
     #--------------------------------------------------------------------------------------------------
     # If it's a function call, Collect function name, eval args, call function.
@@ -1877,7 +1877,7 @@ eval {
         ($match, $after) = ($1, $');
         $pf->click(__LINE__) if defined $pf;
 
-		my $openDelim = $match;
+        my $openDelim = $match;
 
         my $matches = [ $match ];
         my $args    = [ ];
@@ -1890,36 +1890,36 @@ eval {
         while($after) {
             # It would be nice to match a comment preceeding a close paren.
 
-			my $fnDelim = $fnDelim{$openDelim};
+            my $fnDelim = $fnDelim{$openDelim};
 
-			if(defined $fnDelim && !defined $fn) {
-				$fn = $fnDelim if defined $fnDelim;
-				push @$args, $fn;
-			}
+            if(defined $fnDelim && !defined $fn) {
+                $fn = $fnDelim if defined $fnDelim;
+                push @$args, $fn;
+            }
 
 
             if($after =~ /^\s*([\)}\]])\s*/) { 
-				my $match = $1;
-				my $clDelim = $closeDelim{$openDelim};
-  				if($match ne $clDelim) {
-					_report(["Bracket delimter mismatch expression <|%s|>: saw %s, expected %s.", $expr, $match, $clDelim]);
-					$o->throw("Bracket delimter mismatch: saw $match, expected $clDelim.");
-				}
-			}
-			else {
+                my $match = $1;
+                my $clDelim = $closeDelim{$openDelim};
+                if($match ne $clDelim) {
+                    _report(["Bracket delimter mismatch expression <|%s|>: saw %s, expected %s.", $expr, $match, $clDelim]);
+                    $o->throw("Bracket delimter mismatch: saw $match, expected $clDelim.");
+                }
+            }
+            else {
                 my $savedExpr = $after;
 
-				# Do list interpolation.  For now just handle args of function/method calls.
-				my $isListInterpolate = 0;
+                # Do list interpolation.  For now just handle args of function/method calls.
+                my $isListInterpolate = 0;
 
                 my $oEvaling = $o->{evaling};
 
-				# This is how macros can pass unevaluated args.
+                # This is how macros can pass unevaluated args.
                 $o->{evaling} = 0 if $ismacro;
 
-				if($o->{evaling} && $after =~ s/^\s*@//) { $isListInterpolate = 1 }
+                if($o->{evaling} && $after =~ s/^\s*@//) { $isListInterpolate = 1 }
 
-				($value, $after) = $o->eval($after, $vars);
+                ($value, $after) = $o->eval($after, $vars);
 
                 $o->{evaling} = $oEvaling;
 
@@ -1930,35 +1930,35 @@ eval {
                     # $o->{debug} && _report(" -- 1. fn: $fn");
 
 
-					# If $fn is a hash ref (DPL instance) we need the next arg (method name) to find out if this is a function or macro call.
-					if(!defined $inst && ref $fn eq 'HASH' && exists $fn->{'.ismacro'}) {
-						$inst = $fn;
-						undef $fn;
+                    # If $fn is a hash ref (DPL instance) we need the next arg (method name) to find out if this is a function or macro call.
+                    if(!defined $inst && ref $fn eq 'HASH' && exists $fn->{'.ismacro'}) {
+                        $inst = $fn;
+                        undef $fn;
 
-						# _report("Going back and get the method name... inst: $inst");
-						push @$args, $inst;
-						next;
-					}
+                        # _report("Going back and get the method name... inst: $inst");
+                        push @$args, $inst;
+                        next;
+                    }
 
-					if(defined $inst) {
+                    if(defined $inst) {
 
-						$method = $fn;
+                        $method = $fn;
 
-						# _report("Checking for macroness and cleanup... method: $method");
+                        # _report("Checking for macroness and cleanup... method: $method");
 
-						if(exists $inst->{'.ismacro'}->{$method}) {
-							# _report("Found a macro!! $method");
-							$ismacro = 1;
-						}
+                        if(exists $inst->{'.ismacro'}->{$method}) {
+                            # _report("Found a macro!! $method");
+                            $ismacro = 1;
+                        }
 
-						$fn = $inst;
-						undef $inst;
+                        $fn = $inst;
+                        undef $inst;
 
-						# _report(["method: %s", $method]); push @$args, $method;
+                        # _report(["method: %s", $method]); push @$args, $method;
 
-						# _report("Now carrying on with arg processing.... (ismacro: $ismacro)");
-						next;
-					}
+                        # _report("Now carrying on with arg processing.... (ismacro: $ismacro)");
+                        next;
+                    }
 
 
 
@@ -1972,15 +1972,15 @@ eval {
                     # We do need to eat up the expression here and evaling it twice
                     # (once in copy mode here and once in eval mode later) would kinda suck for a function call.
 
-					my $attr = "$fn/ismacro";
-					# _report(['attr: %s (%s)', $attr, ref $o->{varMapNS}->{$attr}]);
+                    my $attr = "$fn/ismacro";
+                    # _report(['attr: %s (%s)', $attr, ref $o->{varMapNS}->{$attr}]);
 
-					my $vars = $o->{varMapNS};
-					my $bi   = $o->{builtinsMap};
+                    my $vars = $o->{varMapNS};
+                    my $bi   = $o->{builtinsMap};
 
                     $ismacro =
-						 (exists($vars->{$attr}) && defined $vars->{$attr}->[0] && $vars->{$attr}->[0] eq '1' ) ||
-						 (exists($bi  ->{$attr}) && defined $bi  ->{$attr}      && $bi  ->{$attr}      eq '1' ) ;
+                         (exists($vars->{$attr}) && defined $vars->{$attr}->[0] && $vars->{$attr}->[0] eq '1' ) ||
+                         (exists($bi  ->{$attr}) && defined $bi  ->{$attr}      && $bi  ->{$attr}      eq '1' ) ;
 
 
                     # _report([" -- fn: %s, ismacro: %s, value: %s", $fn, $ismacro, $value]);
@@ -2000,29 +2000,29 @@ eval {
                 0 && print STDERR " -- ", ($ismacro? 'eval': 'copy'), " collecting args: <|$value|> <|$savedExpr|>\n";
                 0 && print STDERR " -- ", ($ismacro? 'eval': 'copy'), " collecting args: <|$value|>\n";
 
-				# Now we're into the args if any.
+                # Now we're into the args if any.
 
-				if(exists $o->{multi_value_return}) {
-					push @$args, @{$o->{multi_value_return}};
-					delete $o->{multi_value_return};
-				}
-				elsif($isListInterpolate) {
-					if(defined $value) {
-						   if(ref $value eq 'ARRAY') { push @$args, @$value if @$value }
-						elsif(ref $value eq 'HASH' ) { push @$args, %$value if %$value }
+                if(exists $o->{multi_value_return}) {
+                    push @$args, @{$o->{multi_value_return}};
+                    delete $o->{multi_value_return};
+                }
+                elsif($isListInterpolate) {
+                    if(defined $value) {
+                           if(ref $value eq 'ARRAY') { push @$args, @$value if @$value }
+                        elsif(ref $value eq 'HASH' ) { push @$args, %$value if %$value }
 
-						else { $o->throw("Unable to interpolate on value '$value'") }
-					}
-				}
-				else {
-					push @$args, $value;
-				}
+                        else { $o->throw("Unable to interpolate on value '$value'") }
+                    }
+                }
+                else {
+                    push @$args, $value;
+                }
 
                 next;
             }
 
 
-			#  Now we have the args marshalled, we can call the function/macro.
+            #  Now we have the args marshalled, we can call the function/macro.
 
 
             0 && printf STDERR " ## %s/%s function call: <|(%s)|>\n",
@@ -2041,7 +2041,7 @@ eval {
             unless($o->{evaling} || (defined $fn && ($fn =~ /^(if|while|catch|expr-to-list)$/))) {
                 $o->{evaling} = $oEvaling;
                 $match = '(' . join(' ', map { defined $_? $_: '()' } @$args) . ')';
-				# _report(['match: %s   %s:%d', $match, __FILE__, __LINE__]);
+                # _report(['match: %s   %s:%d', $match, __FILE__, __LINE__]);
                 return wantarray? ($match, $after): $match
             } 
 
@@ -2062,33 +2062,33 @@ eval {
 
                 #   my $oEvaling = $o->{evaling};
                 #   $o->{evaling} = 1;
-					unshift @{$varMap->{'.'}}, "x $fn $ns";
+                    unshift @{$varMap->{'.'}}, "x $fn $ns";
 
-					eval {
-						while(@$args) {
-							my $pred  = shift @$args;
-							my $bodyT = shift @$args;
+                    eval {
+                        while(@$args) {
+                            my $pred  = shift @$args;
+                            my $bodyT = shift @$args;
 
-							last if !defined $bodyT;
+                            last if !defined $bodyT;
 
-							if($o->eval($pred, $vars)) {
-								$value = $o->eval($bodyT, $vars);
-								last;
-							}
-			
-							if(@$args > 0) {
-								if(@$args == 1) {
-									my $bodyF = shift @$args;
-									$value = $o->eval($bodyF, $vars);
-									last;
-								}
-							}
-						}
-					};
+                            if($o->eval($pred, $vars)) {
+                                $value = $o->eval($bodyT, $vars);
+                                last;
+                            }
+            
+                            if(@$args > 0) {
+                                if(@$args == 1) {
+                                    my $bodyF = shift @$args;
+                                    $value = $o->eval($bodyF, $vars);
+                                    last;
+                                }
+                            }
+                        }
+                    };
 
-					shift @{$varMap->{'.'}};
+                    shift @{$varMap->{'.'}};
 
-					die $@ if $@;
+                    die $@ if $@;
 
 
                 #   $o->{evaling} = $oEvaling;
@@ -2102,18 +2102,18 @@ eval {
                     my $oEvaling = $o->{evaling};
                     $o->{evaling} = 1;
 
-					unshift @{$varMap->{'.'}}, "x $fn $ns";
+                    unshift @{$varMap->{'.'}}, "x $fn $ns";
 
                     my $value;
                     eval { 
-						while($o->eval($pred, $vars)) {
-							map { $value = $o->eval($_, $vars) } @$body;
-						}
-					};
+                        while($o->eval($pred, $vars)) {
+                            map { $value = $o->eval($_, $vars) } @$body;
+                        }
+                    };
 
-					shift @{$varMap->{'.'}};
+                    shift @{$varMap->{'.'}};
 
-					die $@ if $@;
+                    die $@ if $@;
 
                     $o->{evaling} = $oEvaling;
 
@@ -2131,11 +2131,11 @@ eval {
                     delete $varMap->{_cs};
                     delete $o->{'callstack-at-throw'};
 
-					unshift @{$varMap->{'.'}}, "x $fn $ns";
+                    unshift @{$varMap->{'.'}}, "x $fn $ns";
 
                     my $value = eval { $o->eval($body, $vars) };
 
-					shift @{$varMap->{'.'}};
+                    shift @{$varMap->{'.'}};
 
                     my $e = $@;
 
@@ -2148,11 +2148,11 @@ eval {
 
                                if(exists $e->{value}    ) { _return $e->{value} }
                             elsif(exists $e->{values}) {
-								my $V = $o->{multi_value_return} = $e->{values};
-								my $value = pop @$V; push @$V, $value;	# get last value.
+                                my $V = $o->{multi_value_return} = $e->{values};
+                                my $value = pop @$V; push @$V, $value;  # get last value.
 
-							    _return $value;
-					    	}
+                                _return $value;
+                            }
                             elsif(exists $e->{exception}) { # $builtinsMap->{'var-set'}->($o, [ '_err', $e->{exception} ])
                             }
                             else { $o->throw("Unexpected meta-exception in (catch): $e; " . join(',', map { "$_=$e->{$_}" } sort keys %$e)) }
@@ -2161,12 +2161,12 @@ eval {
                         # Rethrow regular exception (something from perl) as a meta exception.
                         else { $o->throw($e) }
 
-						  my $env = {_err => $e->{exception} };
-						# my $env = { };
+                          my $env = {_err => $e->{exception} };
+                        # my $env = { };
 
                         # $builtinsMap->{'var-set'}->($o, [ '_err', $e->{exception} ]);
-			            $o->{varMapNS}->{_err}->[0] = $e->{exception};
-			            $o->{varMapNS}->{_cs}->[0]  = $e->{callstack};
+                        $o->{varMapNS}->{_err}->[0] = $e->{exception};
+                        $o->{varMapNS}->{_cs}->[0]  = $e->{callstack};
 
                         $value = $o->evalAll($handler, $env);
 
@@ -2180,7 +2180,7 @@ eval {
                 elsif($fn eq 'expr-to-list') {
                     my $value;
 
-					unshift @{$varMap->{'.'}}, "x $fn $ns";
+                    unshift @{$varMap->{'.'}}, "x $fn $ns";
 #-----------------------
 if(1) {
   eval {
@@ -2214,9 +2214,9 @@ else {
 }
 #-----------------------
 
-					shift @{$varMap->{'.'}};
+                    shift @{$varMap->{'.'}};
 
-					die $@ if $@;
+                    die $@ if $@;
 
                     return wantarray? ($value, $after): $value;
                 }
@@ -2251,34 +2251,34 @@ else {
                 # _report(" -- fn: $fn");
                  
                 # _report([' -- args: %s', join('|', map { sprintf '%s=%s', $_, $args->[0]->{$_} } keys %{$args->[0]})]);
-				unshift @{$varMap->{'.'}}, "  $method $fn";
+                unshift @{$varMap->{'.'}}, "  $method $fn";
 
                 my $value = eval $code;
                 my $exc = $@;
 
-				shift @{$varMap->{'.'}};
+                shift @{$varMap->{'.'}};
                 # _report(" -- value: $value");
                 warn "Exception: $exc, line: ", __LINE__  if $exc;
                 $o->throw($exc) if $exc;
                 return wantarray? ($value, $after): $value;
             }
             elsif(ref $fn eq 'CODE') {
-				$fnRef = $fn;
-			}
+                $fnRef = $fn;
+            }
             elsif(ref $fn eq 'HASH') {
                 # $fn is a DPL object/instance method call.
 
                 my $env        = { _obj => $fn };
                 #  my $env        = $fn;  # might work better some day.
-				# would be nice if instance vars could be accessed just like regular vars...
-				#  for this, we really need a list of envs to look through before going to the var table.
+                # would be nice if instance vars could be accessed just like regular vars...
+                #  for this, we really need a list of envs to look through before going to the var table.
 
                 my $dpl_args0  = [ ];
                 my $dpl_args11 = [ ];
                 my $dpl_args12 = [ ];
                 my $dpl_args2  = [ ];
 
-				# _report("ismacro: $ismacro");
+                # _report("ismacro: $ismacro");
 
                 my $n = 1;
                 for my $arg (@$args) {
@@ -2290,7 +2290,7 @@ else {
                     ++$n;
                 }
 
-				### Hmm, how do we implement method calls to a macro??
+                ### Hmm, how do we implement method calls to a macro??
 
                 # map { _report("dpl_args0: $_") } @$dpl_args0;
                 # map { _report("dpl_args11: $_") } @$dpl_args11;
@@ -2318,14 +2318,14 @@ else {
 
                 if(exists $fn->{'.class'} && (my $ns = $fn->{'.class'}) ne '') {
                     $code = sprintf '((fn (obj %s -- val) (namespace %s {self $self obj $obj val $val %s} %s)) $_obj %s)',
-							                #   1                    2                                3   4          5
-											#   1                       2    3                       4      5
+                                            #   1                    2                                3   4          5
+                                            #   1                       2    3                       4      5
                                                 join(' ', @$dpl_args0), $ns, join(' ', @$dpl_args2), $code, join(' ', @$dpl_args12);
                 }
                 else {
                     $code = sprintf '((fn (obj %s -- val) %s ) $_obj %s)',
-											#  1          2          3
-											#  1                       2      3
+                                            #  1          2          3
+                                            #  1                       2      3
                                                join(' ', @$dpl_args0), $code, join(' ', @$dpl_args12);
                 }
 #------------------
@@ -2341,8 +2341,8 @@ else {
             }
             else {
                 # $fn is the variable name refering to the function.
-				# $fnRef is a lambda expression or CODE ref, etc. implementing the function.
-				#------------------------------------------------------------------------------------
+                # $fnRef is a lambda expression or CODE ref, etc. implementing the function.
+                #------------------------------------------------------------------------------------
                 $fnRef = $vars->{$fn}        if   defined $vars;  # caller provided
                 $fnRef = $varMap->{$fn}->[0] if exists $varMap->{$fn} && ! defined $fnRef; # default
                 $fnRef = $builtinsMap->{$fn} if ! defined $fnRef; # overridable
@@ -2357,16 +2357,16 @@ else {
                 #   print STDERR " -- fn: $fn, fnRef: '$fnRef'\n";
                 # _report([" fn: %s, fnRef: '%s'", $fn, $fnRef]);;
 
-				# If the function name looks like a number, we'll make it eval to a number.
-				if(!defined $fnRef && $fn =~ /^(-|\+)?\d+(\.\d*)?$/) {
-					$fnRef = sub { 0+$fn };
-				}
+                # If the function name looks like a number, we'll make it eval to a number.
+                if(!defined $fnRef && $fn =~ /^(-|\+)?\d+(\.\d*)?$/) {
+                    $fnRef = sub { 0+$fn };
+                }
 
-				# If the function name begins or ends with ++ or --, treat the remainder as the variable name and do the incr/decr.
-				if(!defined $fnRef && $fn =~ /^(--|\+\+)?(.+?)(--|\+\+)?$/) {
-					   if( defined $1 && !defined $3) { $fn = $fnRef = sprintf '(fn () (%s_ %s))', $1, $2 }
-					elsif(!defined $1 &&  defined $3) { $fn = $fnRef = sprintf '(fn () (_%s %s))', $3, $2 }
-				}
+                # If the function name begins or ends with ++ or --, treat the remainder as the variable name and do the incr/decr.
+                if(!defined $fnRef && $fn =~ /^(--|\+\+)?(.+?)(--|\+\+)?$/) {
+                       if( defined $1 && !defined $3) { $fn = $fnRef = sprintf '(fn () (%s_ %s))', $1, $2 }
+                    elsif(!defined $1 &&  defined $3) { $fn = $fnRef = sprintf '(fn () (_%s %s))', $3, $2 }
+                }
 
                 # If the function name starts with a qualified descriptor name, look it up, cache it and call it in its own namespace
                 if(!defined $fnRef && $fn =~ /^(((([^:]+):)?([^:]+):)?([^:]+):)?([^:]+):([^:]+)$/) {
@@ -2384,24 +2384,24 @@ else {
                     if(defined $fnRef) { unshift @$args, $fn }
                 }
 
-				if(!defined $fnRef) {
+                if(!defined $fnRef) {
                     # my $bik = [ sort keys %$builtinsMap ];
-					# if($XXXXX++ > 5) { $o->eval('(emit (desc-to-string $bik))', {bik => $bik}); }
-					$o->eval('(report %s (desc-to-string (callstack)))', {});
-					$o->throw("An undefined function '$fn' was called.");
-				}
-				#------------------------------------------------------------------------------------
+                    # if($XXXXX++ > 5) { $o->eval('(emit (desc-to-string $bik))', {bik => $bik}); }
+                    $o->eval('(report %s (desc-to-string (callstack)))', {});
+                    $o->throw("An undefined function '$fn' was called.");
+                }
+                #------------------------------------------------------------------------------------
 
-				# If the fnRef isn't found, let's assume what we have is a variable name and see where that goes...
+                # If the fnRef isn't found, let's assume what we have is a variable name and see where that goes...
 
                 while(!ref $fnRef && $fnRef !~ /^\(\s*(fn|lambda|λ)\s/) {
                     $o->throw("Oh sure, an infinite lookup for '$fn'") if $fnRef eq $fn;
 
                     $fn = $fnRef;
 
-					## Smells like refactoring in the morning...
+                    ## Smells like refactoring in the morning...
                 
-					#------------------------------------------------------------------------------------
+                    #------------------------------------------------------------------------------------
                     $fnRef = $vars->{$fn}        if   defined $vars;  # caller provided
                     $fnRef = $varMap->{$fn}->[0] if ! defined $fnRef; # default
                     $fnRef = $builtinsMap->{$fn} if ! defined $fnRef; # overridable
@@ -2415,16 +2415,16 @@ else {
                     $fnRef = $o->referToLookup($fn, $fnRef) if !defined $fnRef;
                     #   print STDERR " -- fn: $fn, fnRef: '$fnRef'\n";
 
-					# If the function name looks like a number, we'll make it eval to a number.
-					if(!defined $fnRef && $fn =~ /^(-|\+)?\d+(\.\d*)?$/) {
-						$fnRef = sub { 0+$fn };
-					}
+                    # If the function name looks like a number, we'll make it eval to a number.
+                    if(!defined $fnRef && $fn =~ /^(-|\+)?\d+(\.\d*)?$/) {
+                        $fnRef = sub { 0+$fn };
+                    }
 
-					# If the function name begins or ends with ++ or --, treat the remainder as the variable name and do the incr/decr.
-					if(!defined $fnRef && $fn =~ /^(--|\+\+)?(.+?)(--|\+\+)?$/) {
-						   if( defined $1 && !defined $3) { $fn = $fnRef = sprintf '(fn () (%s_ %s))', $1, $2 }
-						elsif(!defined $1 &&  defined $3) { $fn = $fnRef = sprintf '(fn () (_%s %s))', $3, $2 }
-					}
+                    # If the function name begins or ends with ++ or --, treat the remainder as the variable name and do the incr/decr.
+                    if(!defined $fnRef && $fn =~ /^(--|\+\+)?(.+?)(--|\+\+)?$/) {
+                           if( defined $1 && !defined $3) { $fn = $fnRef = sprintf '(fn () (%s_ %s))', $1, $2 }
+                        elsif(!defined $1 &&  defined $3) { $fn = $fnRef = sprintf '(fn () (_%s %s))', $3, $2 }
+                    }
 
                     # If the function name starts with a qualified descriptor name, look it up, cache it and call it in its own namespace
                     if(!defined $fnRef && $fn =~ /^(((([^:]+):)?([^:]+):)?([^:]+):)?([^:]+):([^:]+)$/) {
@@ -2442,11 +2442,11 @@ else {
                         if(defined $fnRef) { unshift @$args, $fn }
                     }
 
-					if(!defined $fnRef) {
-						$o->eval("(report %s (desc-to-string (callstack)))", {});
-						$o->throw("An undefined function '$fn' was called..");
-					}
-					#------------------------------------------------------------------------------------
+                    if(!defined $fnRef) {
+                        $o->eval("(report %s (desc-to-string (callstack)))", {});
+                        $o->throw("An undefined function '$fn' was called..");
+                    }
+                    #------------------------------------------------------------------------------------
                 }
             }
 
@@ -2454,11 +2454,11 @@ else {
 
             if(ref $fnRef eq 'CODE') {
                 # Function is a builtin function. call it.
-				unshift @{$varMap->{'.'}}, "i $fn $ns";
+                unshift @{$varMap->{'.'}}, "i $fn $ns";
                 $value = eval { $fnRef->($o, $args, $vars) };
-				shift @{$varMap->{'.'}};
+                shift @{$varMap->{'.'}};
 
-				if($@) { die $@ }
+                if($@) { die $@ }
 
                 # print STDERR " -- value: '$value'\n";
             }
@@ -2540,7 +2540,7 @@ else {
                 $afterL =~ s/\)$//;
 
 
-				unshift @{$varMap->{'.'}}, "  $fn $ns";
+                unshift @{$varMap->{'.'}}, "  $fn $ns";
 
 #-------------------
                 if(-f '/tmp/dpl-callstack-dump.doit') {
@@ -2555,7 +2555,7 @@ else {
                 # Eval function body, capture perl die caused by early out (return)
                 $value = eval { $o->evalAll($afterL, { }) };
 
-				shift @{$varMap->{'.'}};
+                shift @{$varMap->{'.'}};
 
 
                 # TODO save 'close' values over vars named after '--'
@@ -2579,15 +2579,15 @@ else {
                         die $e if $ismacro;
 
                            if(exists $e->{value}) {
-							$value = $e->{value};
-						}
+                            $value = $e->{value};
+                        }
                         elsif(exists $e->{values}) {
-							my $V = $o->{multi_value_return} = $e->{values};
-							$value = pop @$V; push @$V, $value;	# get last value.
-						}
-						elsif(exists $e->{exception}) {
-							$o->throw($e->{exception});
-						}
+                            my $V = $o->{multi_value_return} = $e->{values};
+                            $value = pop @$V; push @$V, $value; # get last value.
+                        }
+                        elsif(exists $e->{exception}) {
+                            $o->throw($e->{exception});
+                        }
                         else { $o->throw("Unexpected meta-exception (after function return): $e; " . join(',', map { "$_=$e->{$_}" } sort keys %$e)) }
                     }
                     else { $o->throw($e) }
@@ -2684,11 +2684,11 @@ else {
         my $value2 = $vars->{$name}  if   defined $vars;  # caller provided
         # printf STDERR " -- value2: %s\n", defined$ value2? $value2: '<undef>';
 
-		# !! ################
-		# !! #  If Core.dpli hasn't been loaded because the specified descriptor directory is bogus,
-		# !! #  this call will fail (because var-get is defined in code.dpli) with an obscure error:
-		# !! #  Use of uninitialized value in subroutine entry at /usr/local/lib/perl/PrimaLisp.pm line 2360, <DATA> line 1.
-		# !! ################
+        # !! ################
+        # !! #  If Core.dpli hasn't been loaded because the specified descriptor directory is bogus,
+        # !! #  this call will fail (because var-get is defined in code.dpli) with an obscure error:
+        # !! #  Use of uninitialized value in subroutine entry at /usr/local/lib/perl/PrimaLisp.pm line 2360, <DATA> line 1.
+        # !! ################
 
           $value = defined $value2? $value2: $o->{builtinsMap}->{'var-get'}->($o, [$name]);
         # $value = defined $value2? $value2: $varMap->{$name}->[0];
@@ -2714,7 +2714,7 @@ else {
         $value =~ s/\\'/'/gs;
         $value =~ s/\\\\/\\/gs;
 
-		# printf STDERR " **** is_utf8: %s '%s'\n", utf8::is_utf8($value)? 'yes': 'no', utf8::is_utf8($value)? encode_utf8($value): $value;
+        # printf STDERR " **** is_utf8: %s '%s'\n", utf8::is_utf8($value)? 'yes': 'no', utf8::is_utf8($value)? encode_utf8($value): $value;
         $value = decode_utf8($value);
 
         return wantarray? ($value, $after): $value;
@@ -2754,15 +2754,15 @@ else {
         $pf->click(__LINE__) if defined $pf;
         # _report " -- after: <|$after|>";
 
-		# _report(['on commma: %s', defined $o->{oncomma}? $o->{oncomma}: '<undef>']);
+        # _report(['on commma: %s', defined $o->{oncomma}? $o->{oncomma}: '<undef>']);
 
-		my $setting = $o->{oncomma};
+        my $setting = $o->{oncomma};
 
-		my $evalSetting;
+        my $evalSetting;
 
-		   if(!defined $setting)    { $evalSetting = 1 }
-		elsif($setting eq 'ignore') { $evalSetting = 0 }
-		else { $o->throw("Unknown oncomma setting '$setting'") }
+           if(!defined $setting)    { $evalSetting = 1 }
+        elsif($setting eq 'ignore') { $evalSetting = 0 }
+        else { $o->throw("Unknown oncomma setting '$setting'") }
 
 
         my $oEvaling = $o->{evaling};
@@ -2907,16 +2907,16 @@ repl {
         $o->{evalEndTime} = time unless defined $o->{evalEndTime};
 
         if($o->{showTimes}) {
-			my $n_evals_this = $n_eval_end - $n_eval_start;
-			my $elapsed = $o->{evalEndTime} - $o->{evalStartTime};
-			my $unit = 's';
+            my $n_evals_this = $n_eval_end - $n_eval_start;
+            my $elapsed = $o->{evalEndTime} - $o->{evalStartTime};
+            my $unit = 's';
 
-			if($elapsed < 1) {
-				$elapsed *= 1000; $unit = 'ms';
-				if($elapsed < 1) {
-					$elapsed *= 1000; $unit = 'us';
-					if($elapsed < 1) {
-						$elapsed *= 1000; $unit = 'ns'; }}}
+            if($elapsed < 1) {
+                $elapsed *= 1000; $unit = 'ms';
+                if($elapsed < 1) {
+                    $elapsed *= 1000; $unit = 'us';
+                    if($elapsed < 1) {
+                        $elapsed *= 1000; $unit = 'ns'; }}}
 
             printf " ~~ elapsed: %.2f%s (%.2fu %.2fs %.2fcu %.2fcs)\n", $elapsed, $unit, times;
             printf " ~~ n_evals: %d, n_evals_this: %d\n", $n_eval_end, $n_evals_this;
@@ -2998,19 +2998,19 @@ initInterpreter {
 
     $pf->click(__LINE__) if defined $pf;
 
-	my $lastDir;
+    my $lastDir;
 
-	if($o->{descDir} =~ /:/) {
+    if($o->{descDir} =~ /:/) {
         my $dirs = [ split /:/, $o->{descDir} ];
-		$o->{descDir} = $dirs->[0];
-		$lastDir = $dirs->[@$dirs-1];
+        $o->{descDir} = $dirs->[0];
+        $lastDir = $dirs->[@$dirs-1];
 
-		$o->{descDirList} = $dirs;
-	}
-	else {
-		$o->{descDirList} = [ $o->{descDir} ];
-		$lastDir = $o->{descDir};
-	}
+        $o->{descDirList} = $dirs;
+    }
+    else {
+        $o->{descDirList} = [ $o->{descDir} ];
+        $lastDir = $o->{descDir};
+    }
 
     $o->throw("Descriptor dir '$o->{descDir}' does not exist")  unless -d $o->{descDir};
     $o->throw("Descriptor dir '$o->{descDir}' is not writable") unless -w $lastDir;
@@ -3021,7 +3021,7 @@ initInterpreter {
 
     $_sig_o = $o unless defined $_sig_o;
 
-	$logFH->autoflush(1);
+    $logFH->autoflush(1);
 
     my $baseInitFile = $o->getFullPathFromPath('.dpl-init.pl');
     if(defined $baseInitFile && -f $baseInitFile) {
@@ -3057,11 +3057,11 @@ initInterpreter {
     return $r if $r;
 
     if($@) {
-		print STDERR " !! initInterpreter()\n";
+        print STDERR " !! initInterpreter()\n";
         my $e = $@;
-		my $cs = $e->{callstack};
-		$cs = defined $cs? join("\n", @$cs): '-no-cs-';
-		
+        my $cs = $e->{callstack};
+        $cs = defined $cs? join("\n", @$cs): '-no-cs-';
+        
         # map { print STDERR " -- Exception k: '$_' v: '$e->{$_}'\n" } keys %$e;
         die " !! $e\n"              if !ref $e;
         die " !! Exception: $e->{exception}, callstack: \n$cs\n" if exists $e->{exception};
@@ -3170,10 +3170,10 @@ new {
 
     my $cgiDir = getCGIDir;
 
-	my $descDir =    './descriptor-dir'        if -d './descriptor-dir';
-	$descDir = $ENV{DPL_DESC_DIR}              if ! defined $descDir && exists $ENV{DPL_DESC_DIR} && -d $ENV{DPL_DESC_DIR};
-	$descDir = "$ENV{HOME}/descriptor-dir"     if ! defined $descDir && exists $ENV{HOME} && -d "$ENV{HOME}/descriptor-dir";
-	$descDir = "$cgiDir/descriptor-dir"        if ! defined $descDir && -d "$cgiDir/descriptor-dir";
+    my $descDir =    './descriptor-dir'        if -d './descriptor-dir';
+    $descDir = $ENV{DPL_DESC_DIR}              if ! defined $descDir && exists $ENV{DPL_DESC_DIR} && -d $ENV{DPL_DESC_DIR};
+    $descDir = "$ENV{HOME}/descriptor-dir"     if ! defined $descDir && exists $ENV{HOME} && -d "$ENV{HOME}/descriptor-dir";
+    $descDir = "$cgiDir/descriptor-dir"        if ! defined $descDir && -d "$cgiDir/descriptor-dir";
 
     $o->{descDir} = $descDir;
 
