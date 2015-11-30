@@ -1309,7 +1309,7 @@ FINI
     'desc-from-string/usage' => "(desc-from-string -string- [options]) : Return the descriptor deserialized from -string-.",
     'desc-from-string' => sub {
         my ($o, $args) = @_;
-        # print STDERR " >> desc-from-string($o, $args)\n";
+        # _report([' >> desc-from-string(%s, %s)', $o, $args]);
         return unless defined $args->[0] && $args->[0];
 
         $o->{_json_} = $args->[0];
@@ -1325,7 +1325,8 @@ FINI
 
         sub _postdeserialize {
             my ($o, $val) = @_;
-            if(ref $val eq '') {
+            # _report([' >> _postdeserialize(%s "%s")', $val, ref($val)]);
+            if(ref $val eq '' || $val =~ /^[-+]?\d+(\.\d+)?$/) {
                 unless(defined $val) { $o->throw("undefined value here from '$o->{_json_}'") }
 
                 if($val =~ /^\(sym-from-string '.*'\)$/) {
