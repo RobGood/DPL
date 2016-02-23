@@ -940,12 +940,14 @@ sub _assertIsValidTypeName { PrimaLisp::_assertIsValidTypeName @_ }
 
     # Arithmetic, etc.
     '+' => sub { my ($o, $args) = @_; my $v = shift @$args; map { $v += $_ } @$args; $v },
-    '-' => sub { my ($o, $args) = @_; my $v = shift @$args; map { $v -= $_ } @$args; $v },
+    '-' => sub { my ($o, $args) = @_; my $v = shift @$args; map { $v -= $_ } @$args; @$args? $v: -$v },
     '×' => sub { my ($o, $args) = @_; my $v = 1;            map { $v *= $_ } @$args; $v },
     '÷' => sub { my ($o, $args) = @_; my $v = shift @$args; map { $v /= $_ } @$args; $v },
 
     '%'   => sub { my ($o, $args) = @_;   $args->[0]  % $args->[1] },
     '..'  => sub { my ($o, $args) = @_; [ $args->[0] .. $args->[1] ] },
+    # '..'  => sub { my ($o, $args) = @_; $args->[0] <= $args->[1]? [ $args->[0] .. $args->[1] ]: [ reverse ( $args->[1] .. $args->[0]) ] },
+
 
     '<'   => sub { my ($o, $args) = @_; while(@$args >= 2 && $args->[0]  < $args->[1]) { shift @$args } return @$args == 1? JSON::true: JSON::false },
     '>'   => sub { my ($o, $args) = @_; while(@$args >= 2 && $args->[0]  > $args->[1]) { shift @$args } return @$args == 1? JSON::true: JSON::false },
@@ -5321,12 +5323,16 @@ FINI
     'atomic/usage' => '(atomic -name- -options- -exprs- ...) : Evaluate -exprs- mutually exclusively with respect to -name-.',
     'atomic/ismacro' => 1,
     'atomic' => '(fn (name options &exprs -- ret lxk cs)
-        (= name  (eval $name))
+        (= name    (eval $name))
+        (= options (eval $options))
+        (if (! (hash? $options))
+          (throw "Options not a hash in atomic block \'$name\'"))
+
         (= lxk "${name}-lk-var")
         #(= cs (callstack))
         #(report-vars . name lxk cs (= A A))
 
-        (lock-acquire $name $lxk (eval $options))
+        (lock-acquire $name $lxk $options)
         (= ret (catch
                  (eval-all $exprs)
                  (do
