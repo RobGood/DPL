@@ -3723,7 +3723,7 @@ else {
 
         unshift @{$varMap->{':'}}, $path;
 
-        # _report(['name: %s, hash-eval stack: %s', $args->[2], join(':', @{$varMap->{':'}})]);
+        # _report([' -- name: %s, hash-eval stack: %s', $args->[2], join(':', @{$varMap->{':'}})]);
 
         my $value = eval { $o->evalAll($expr, { }) };
         # print STDERR " -- value: <|$value|>\n";
@@ -4262,9 +4262,11 @@ FINI
             }
         }
         else {
-            my $cmd = "ci -q -t-auto-PrimaLisp-cleared $descFile ;";
-            # print STDERR " %> $cmd\n";
-            system $cmd;
+            unless(defined $options->{'no-checkpoint'} && $options->{'no-checkpoint'}) {
+                my $cmd = "ci -q -t-auto-PrimaLisp-cleared $descFile ;";
+                # print STDERR " %> $cmd\n";
+                system $cmd;
+            }
         }
 
 
