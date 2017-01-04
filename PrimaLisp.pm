@@ -33,8 +33,8 @@ BEGIN {
 
 #X# doc_PerlPackage(<|
 package PrimaLisp;
-$Version = '0.8.51';
-$VDate   = '2015-10-20';
+$Version = '0.8.52';
+$VDate   = '2017-01-04';
 #X# |>)
 
 # $Version = sprintf '%s.%s', $Version, (split /\./, (split /\s+/, '$Revision: 1.463 $')[1])[1];
@@ -92,7 +92,13 @@ _report {
         # map { printf STDERR " -- msg: %s\n", utf8::is_utf8($_)? encode_utf8($_): $_ } @$msg;
 
         my $fmt = shift @$msg;
-        $msg = sprintf $fmt, map { decode_utf8 $_ } @$msg;
+        if(ref $fmt eq 'HASH') {
+            my $j   = JSON->new->allow_blessed->allow_nonref->convert_blessed->pretty->canonical;
+            $msg =  $j->encode($fmt);
+        }
+        else {
+            $msg = sprintf $fmt, map { decode_utf8 $_ } @$msg;
+        }
     }
 
     chomp $msg;
@@ -107,8 +113,14 @@ _report {
     $logFH->autoflush(1);
 
     my $now = time;
-    printf $logFH " %s [%.6f %s]%s %s\n",
-        $typeStr, $now, scalar(localtime($now)), $tid, encode_utf8($msg);
+    my $date = scalar gmtime $now;
+
+    my $str  = sprintf " %s [%.6f %s]%s %s", $typeStr, $now, $date, $tid, $msg;
+    # my $data = { typeStr => $typeStr, timestamp => $now, date => $date, msg => $msg };
+    # if($tid ne '') { $data->{tid} = $tid }
+    # push @$_reportOuputQueue, $data;
+
+    printf $logFH "%s\n", encode_utf8($str);
 
     return;
 }
@@ -146,6 +158,7 @@ throw {
     if(!defined $cs) {
         $cs = $bi->{callstack}->($o, []);
         $o->{'callstack-at-throw'} = $cs;
+        printf STDERR (" ^^ cs: %s, e: %s\n", join(" | ", @$cs), $e);
         _report(['cs: %s', join(" | ", @$cs)]);
     }
 
@@ -409,13 +422,13 @@ my $Default_builtinsMap = {
             (foreach name (hash-get $api / $path)
               // (report " -> %s - %s (%s)" $path $name)
               (def-hash-fn $self $path $name)))
-          (var-set $fn (utf8-decode (hash-eval $self $path $fn)) {path $path desc-name $self/name})))',
+          (var-set $fn (utf8-decode (hash-eval $self $path $fn)) {path (if (defined? $:) $: $path) desc-name $self/name})))',
 
     'def-desc-fn/usage' => '(def-desc-fn -desc- -path- -name-) : Define function -name- from expression in -desc- at -path- / -name- (using /refer-to inheritance).',
     'def-desc-fn' => '(fn (self path fn) (var-set $fn (desc-eval $self $path $fn) {path $path}))',
 
     'report-vars/usage' => '(report-vars -var-names- ...) : Report the values given.',
-    'report-vars' => '(fn (&names) (report %s (desc-to-string $[@$names])))',
+    'report-vars' => '(fn (&names) (report $$names))',
 
     # '/usage' => '() : .',
     # '' => sub {
@@ -853,7 +866,6 @@ my $Default_builtinsMap = {
     'report/usage' => "(report -msg-) : Timestamp and write -msg- to log file.",
     'report' => sub {
         my ($o, $args) = @_;
-        # print $logFH  map { encode_utf8($_) } @$args;
         _report $args;
         return;
     },
@@ -1268,10 +1280,10 @@ FINI
             elsif(JSON::is_bool $val  ) {  }
             elsif(ref $val eq 'SCALAR') { $_[1] = sprintf '(sym-from-string \'%s\')', $o->eval('(sym-to-string $_val)', { _val => $val }); }
 
-            else { $o->throw("_preserialize: Shouldn't get here.") }
+            else { $o->throw("_preserialize: Shouldn't get here. val $val") }
         };
 
-        $o->_preserialize($val);
+        # $o->_preserialize($val);
 
         my $j = JSON->new->allow_blessed->allow_nonref->convert_blessed;
 
@@ -2740,8 +2752,8 @@ else {
         $value =~ s/\\\\/\\/gs;
 
         # Do some (simple) variable interpolation *after* unescaping backslash escaped chars.
-        #           1       2             3
-        $value =~ s/([^\\])?(\${?[-!+\w;?]+}?)(\s)?/$o->_interpolate_($vars, $1, $2, $3)/egs;
+        #           1       2                   3
+        $value =~ s/([^\\])?(\$\{?[-!+\w;?]+\}?)(\s)?/$o->_interpolate_($vars, $1, $2, $3)/egs;
 
         $value = decode_utf8($value);
 
@@ -2899,6 +2911,7 @@ repl {
         $done = eval { $o->rep };
         my $e = $@;
         if($e) {
+printf STDERR " @@@@ %s\n", JSON::to_json($@);
             if(exists $e->{exception}) { _report([" !! Exception: %s", $e->{exception}]); $o->{evaling} = 1  }
             elsif(exists $e->{value} ) { _report " -- Value: $e->{value}"         }
             else                       { _report([" !! Exception: %s", $e]); $o->{evaling} = 1  }
