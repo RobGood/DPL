@@ -89,6 +89,9 @@ while(@ARGV) {
     elsif($arg eq '-eval') {
         $argEval = shift;
     }
+    elsif($arg eq '-ep') {
+        $argEval = sprintf '(= V (do %s)) (print (if (string? $V) "$V\n" (desc-to-string $V)))', shift;
+    }
     elsif($arg eq '-desc') {
         $argDesc = shift;
     }
