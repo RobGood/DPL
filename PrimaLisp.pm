@@ -1,6 +1,4 @@
-#!/usr/bin/perl -w
-# -*- coding: UTF-8 -*-
-# $Id: PrimaLisp.pm,v 1.463 2013/04/18 19:19:24 rcgood Exp $  #%^)
+# vim: syntax=perl fileencoding=utf8
 #
 # This implements a PrimaLisp interpreter and some basic builtins.
 # Copyright (C) 2010-2013 Rob Good
