@@ -1,9 +1,8 @@
-# -*- coding: UTF-8 -*-
-# $Id: Core.dpli,v 1.327 2013/04/18 19:17:55 rcgood Exp $
+# vim: syntax=perl fileencoding=utf8
 #
-# This file contains implementations of the core DPL builtin functions not found in PrimaLisp.pm,
-# and their supporting code.
-# Copyright (C) 2010-2013 Rob Good
+# This file contains implementations of the core DPL builtin functions
+# not found in PrimaLisp.pm, and their supporting code.
+# Copyright (C) 2010-2017 Rob Good
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -854,6 +853,7 @@ cnvt_date_to_time {
 
     ## Fixup timezone spec.
     $timeStr =~ s/GMT-(\d+):(\d+)/-$1$2/;
+    $timeStr =~ s/([+-])(\d+):(\d+)/$1$2$3/;
 
 
     # print STDERR " -- 2. Converting '$timeStr' to time\n";
